@@ -38,45 +38,48 @@ export default function Home() {
     })();
   }, []);
 
-  // Whole-alliance totals across every KvK ever uploaded, for the
-  // homepage summary cards. Sums every governor's gains (latest minus
-  // that KvK's baseline) across every event.
+  // Current KvK totals for the homepage summary cards. Sums every
+  // governor's gains (latest minus that KvK's baseline) for the active
+  // KvK only.
   useEffect(() => {
     (async () => {
       setAllianceLoading(true);
-      const { data: allEvents } = await supabasePublic.from("kvk_events").select("id");
+      const { data: allEvents } = await supabasePublic.from("kvk_events").select("*").order("id", { ascending: false });
+      const active = allEvents?.find((e) => e.is_active) || allEvents?.[0];
       let totalT4 = 0, totalT5 = 0, totalDeaths = 0;
 
-      for (const ev of allEvents || []) {
+      if (active) {
         const { data: snaps } = await supabasePublic
           .from("snapshots")
           .select("*")
-          .eq("kvk_event_id", ev.id)
+          .eq("kvk_event_id", active.id)
           .order("uploaded_at", { ascending: true });
-        if (!snaps || snaps.length < 1) continue;
 
-        const baseline = snaps.length > 1 ? (snaps.find((s) => s.is_baseline) || snaps[0]) : null;
-        const latest = snaps[snaps.length - 1];
-        if (baseline && baseline.id === latest.id) continue;
+        if (snaps && snaps.length >= 1) {
+          const baseline = snaps.length > 1 ? (snaps.find((s) => s.is_baseline) || snaps[0]) : null;
+          const latest = snaps[snaps.length - 1];
 
-        const baselineRows = baseline
-          ? (await supabasePublic
-              .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", baseline.id)
-            ).data
-          : [];
-        const { data: latestRows } = await supabasePublic
-          .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", latest.id);
+          if (!baseline || baseline.id !== latest.id) {
+            const baselineRows = baseline
+              ? (await supabasePublic
+                  .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", baseline.id)
+                ).data
+              : [];
+            const { data: latestRows } = await supabasePublic
+              .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", latest.id);
 
-        for (const l of latestRows || []) {
-          const b = baselineRows?.find((r) => r.governor_id === l.governor_id);
-          const d = computeDelta(b, l);
-          totalT4 += d.t4_kills;
-          totalT5 += d.t5_kills;
-          totalDeaths += d.deaths;
+            for (const l of latestRows || []) {
+              const b = baselineRows?.find((r) => r.governor_id === l.governor_id);
+              const d = computeDelta(b, l);
+              totalT4 += d.t4_kills;
+              totalT5 += d.t5_kills;
+              totalDeaths += d.deaths;
+            }
+          }
         }
       }
 
-      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths });
+      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName: active?.name });
       setAllianceLoading(false);
     })();
   }, []);
@@ -293,7 +296,7 @@ export default function Home() {
       </header>
 
       <section className="bg-slate-900 rounded-xl p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Alliance totals — all KvKs</h2>
+        <h2 className="text-lg font-semibold">Alliance totals — {allianceTotals?.eventName || "current KvK"}</h2>
         {allianceLoading ? (
           <p className="text-sm text-slate-500">Loading...</p>
         ) : allianceTotals ? (
