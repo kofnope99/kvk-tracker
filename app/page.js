@@ -38,52 +38,6 @@ export default function Home() {
     })();
   }, []);
 
-  // Current KvK totals for the homepage summary cards. Sums every
-  // governor's gains (latest minus that KvK's baseline) for the active
-  // KvK only.
-  useEffect(() => {
-    (async () => {
-      setAllianceLoading(true);
-      const { data: allEvents } = await supabasePublic.from("kvk_events").select("*").order("id", { ascending: false });
-      const active = allEvents?.find((e) => e.is_active) || allEvents?.[0];
-      let totalT4 = 0, totalT5 = 0, totalDeaths = 0;
-
-      if (active) {
-        const { data: snaps } = await supabasePublic
-          .from("snapshots")
-          .select("*")
-          .eq("kvk_event_id", active.id)
-          .order("uploaded_at", { ascending: true });
-
-        if (snaps && snaps.length >= 1) {
-          const baseline = snaps.length > 1 ? (snaps.find((s) => s.is_baseline) || snaps[0]) : null;
-          const latest = snaps[snaps.length - 1];
-
-          if (!baseline || baseline.id !== latest.id) {
-            const baselineRows = baseline
-              ? (await supabasePublic
-                  .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", baseline.id)
-                ).data
-              : [];
-            const { data: latestRows } = await supabasePublic
-              .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", latest.id);
-
-            for (const l of latestRows || []) {
-              const b = baselineRows?.find((r) => r.governor_id === l.governor_id);
-              const d = computeDelta(b, l);
-              totalT4 += d.t4_kills;
-              totalT5 += d.t5_kills;
-              totalDeaths += d.deaths;
-            }
-          }
-        }
-      }
-
-      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName: active?.name });
-      setAllianceLoading(false);
-    })();
-  }, []);
-
   // Whenever the chosen KvK changes, load its snapshots (Day 1, Day 3, ...)
   // and default the "view as of" picker to the newest one.
   useEffect(() => {
@@ -106,19 +60,41 @@ export default function Home() {
   useEffect(() => {
     if (!selectedEventId || snapshots.length === 0 || !selectedSnapshotId) {
       setLeaderboard(null);
+      setAllianceTotals(null);
+      setAllianceLoading(false);
       return;
     }
     (async () => {
       setLeaderboardLoading(true);
+      setAllianceLoading(true);
       const baseline = snapshots.length > 1 ? (snapshots.find((s) => s.is_baseline) || snapshots[0]) : null;
       const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
-      if (!latest) { setLeaderboard(null); setLeaderboardLoading(false); return; }
+      if (!latest) {
+        setLeaderboard(null); setLeaderboardLoading(false);
+        setAllianceTotals(null); setAllianceLoading(false);
+        return;
+      }
 
       const snapshotIds = baseline ? [baseline.id, latest.id] : [latest.id];
       const { data: rows } = await supabasePublic
         .from("governor_stats").select("*").in("snapshot_id", snapshotIds);
       const baselineRows = baseline ? (rows || []).filter((r) => r.snapshot_id === baseline.id) : [];
       const latestRows = (rows || []).filter((r) => r.snapshot_id === latest.id);
+
+      // Raw alliance-wide totals (every governor row, farms included at
+      // full value -- this is "total kills/deaths that happened", not a
+      // per-governor attribution, so no 20% weighting here).
+      let totalT4 = 0, totalT5 = 0, totalDeaths = 0;
+      for (const l of latestRows) {
+        const b = baselineRows.find((r) => r.governor_id === l.governor_id);
+        const d = computeDelta(b, l);
+        totalT4 += d.t4_kills;
+        totalT5 += d.t5_kills;
+        totalDeaths += d.deaths;
+      }
+      const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name;
+      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName });
+      setAllianceLoading(false);
 
       const { data: links } = await supabasePublic.from("account_links").select("*").eq("status", "approved");
       const farmIds = new Set((links || []).map((l) => l.farm_governor_id));
