@@ -3,6 +3,61 @@ import { useState, useEffect } from "react";
 import { supabasePublic } from "../lib/supabaseClient";
 import { computeDelta, computePoints, findRequirementTier, computeRequiredPoints } from "../lib/points";
 import StatsCharts from "./StatsCharts";
+import BarCompareChart from "./BarCompareChart";
+
+// Shared helpers for KvK-vs-KvK comparisons -- fetch a single event's
+// baseline/latest snapshot pair, then sum stats from it.
+async function getEventBaselineLatest(eventId) {
+  const { data: snaps } = await supabasePublic
+    .from("snapshots").select("*").eq("kvk_event_id", eventId).order("uploaded_at", { ascending: true });
+  if (!snaps || snaps.length === 0) return null;
+  const baseline = snaps.length > 1 ? (snaps.find((s) => s.is_baseline) || snaps[0]) : null;
+  const latest = snaps[snaps.length - 1];
+  return { baseline, latest };
+}
+
+async function computeAllianceTotalsForEvent(eventId) {
+  const bl = await getEventBaselineLatest(eventId);
+  if (!bl || !bl.latest) return { totalT4: 0, totalT5: 0, totalDeaths: 0 };
+  const ids = bl.baseline ? [bl.baseline.id, bl.latest.id] : [bl.latest.id];
+  const { data: rows } = await supabasePublic.from("governor_stats").select("*").in("snapshot_id", ids);
+  const baselineRows = bl.baseline ? (rows || []).filter((r) => r.snapshot_id === bl.baseline.id) : [];
+  const latestRows = (rows || []).filter((r) => r.snapshot_id === bl.latest.id);
+  let totalT4 = 0, totalT5 = 0, totalDeaths = 0;
+  for (const l of latestRows) {
+    const b = baselineRows.find((r) => r.governor_id === l.governor_id);
+    const d = computeDelta(b, l);
+    totalT4 += d.t4_kills; totalT5 += d.t5_kills; totalDeaths += d.deaths;
+  }
+  return { totalT4, totalT5, totalDeaths };
+}
+
+async function computeGovernorTotalsForEvent(eventId, mainGovId) {
+  const bl = await getEventBaselineLatest(eventId);
+  if (!bl || !bl.latest) return null;
+  const { data: links } = await supabasePublic
+    .from("account_links").select("*").eq("main_governor_id", mainGovId).eq("status", "approved");
+  const allIds = [mainGovId, ...(links || []).map((l) => l.farm_governor_id)];
+  const ids = bl.baseline ? [bl.baseline.id, bl.latest.id] : [bl.latest.id];
+  const { data: rows } = await supabasePublic.from("governor_stats").select("*").in("snapshot_id", ids);
+  const baselineRows = bl.baseline ? (rows || []).filter((r) => r.snapshot_id === bl.baseline.id) : [];
+  const latestRows = (rows || []).filter((r) => r.snapshot_id === bl.latest.id);
+  let t4 = 0, t5 = 0, deaths = 0;
+  let found = false;
+  for (const id of allIds) {
+    const b = baselineRows.find((r) => r.governor_id === id);
+    const l = latestRows.find((r) => r.governor_id === id);
+    if (!l) continue;
+    found = true;
+    const d = computeDelta(b, l);
+    const w = id === mainGovId ? 1 : 0.2;
+    t4 += d.t4_kills * w; t5 += d.t5_kills * w; deaths += d.deaths * w;
+  }
+  if (!found) return null;
+  const { data: rules } = await supabasePublic.from("point_rules").select("*").eq("kvk_event_id", eventId);
+  const points = computePoints({ t4_kills: t4, t5_kills: t5, deaths }, rules);
+  return { t4_kills: t4, t5_kills: t5, deaths, points };
+}
 
 export default function Home() {
   const [govId, setGovId] = useState("");
@@ -21,6 +76,14 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
+  const [compareEventA, setCompareEventA] = useState("");
+  const [compareEventB, setCompareEventB] = useState("");
+  const [allianceCompareData, setAllianceCompareData] = useState(null);
+
+  const [govCompareEventId, setGovCompareEventId] = useState("");
+  const [govCompareData, setGovCompareData] = useState(null);
+  const [govCompareLoading, setGovCompareLoading] = useState(false);
+
   const [linkMain, setLinkMain] = useState("");
   const [linkFarm, setLinkFarm] = useState("");
   const [linkMsg, setLinkMsg] = useState("");
@@ -35,8 +98,30 @@ export default function Home() {
       setEvents(data || []);
       const active = data?.find((e) => e.is_active) || data?.[0];
       if (active) setSelectedEventId(String(active.id));
+      if (data && data.length >= 2) {
+        setCompareEventA(String(data[0].id));
+        setCompareEventB(String(data[1].id));
+      } else if (data && data.length === 1) {
+        setCompareEventA(String(data[0].id));
+      }
     })();
   }, []);
+
+  // Alliance-wide totals comparison between any two KvKs.
+  useEffect(() => {
+    if (!compareEventA || !compareEventB) { setAllianceCompareData(null); return; }
+    (async () => {
+      const [a, b] = await Promise.all([
+        computeAllianceTotalsForEvent(compareEventA),
+        computeAllianceTotalsForEvent(compareEventB),
+      ]);
+      setAllianceCompareData([
+        { name: "T4 Kills", A: a.totalT4, B: b.totalT4 },
+        { name: "T5 Kills", A: a.totalT5, B: b.totalT5 },
+        { name: "Deaths", A: a.totalDeaths, B: b.totalDeaths },
+      ]);
+    })();
+  }, [compareEventA, compareEventB]);
 
   // Whenever the chosen KvK changes, load its snapshots (Day 1, Day 3, ...)
   // and default the "view as of" picker to the newest one.
@@ -129,6 +214,8 @@ export default function Home() {
   async function search() {
     setError("");
     setResult(null);
+    setGovCompareEventId("");
+    setGovCompareData(null);
     if (!govId.trim()) return;
     if (!selectedEventId || !selectedSnapshotId) {
       setError("No stats uploaded yet for that KvK.");
@@ -251,6 +338,15 @@ export default function Home() {
     }
   }
 
+  async function compareGovernor(eventId) {
+    setGovCompareEventId(eventId);
+    if (!eventId || !govId.trim()) { setGovCompareData(null); return; }
+    setGovCompareLoading(true);
+    const data = await computeGovernorTotalsForEvent(eventId, govId.trim());
+    setGovCompareData(data);
+    setGovCompareLoading(false);
+  }
+
   async function submitLink(e) {
     e.preventDefault();
     setLinkMsg("");
@@ -346,6 +442,23 @@ export default function Home() {
       </section>
 
       <section className="bg-slate-900 rounded-xl p-6 space-y-4">
+        <h2 className="text-lg font-semibold">Compare KvKs — alliance totals</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select className="rounded-lg bg-slate-800 px-3 py-2 text-sm" value={compareEventA} onChange={(e) => setCompareEventA(e.target.value)}>
+            {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+          </select>
+          <select className="rounded-lg bg-slate-800 px-3 py-2 text-sm" value={compareEventB} onChange={(e) => setCompareEventB(e.target.value)}>
+            {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+          </select>
+        </div>
+        <BarCompareChart
+          data={allianceCompareData}
+          labelA={events.find((e) => String(e.id) === String(compareEventA))?.name || "KvK A"}
+          labelB={events.find((e) => String(e.id) === String(compareEventB))?.name || "KvK B"}
+        />
+      </section>
+
+      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
         <h2 className="text-lg font-semibold">Check your stats</h2>
 
         <div className="flex gap-2">
@@ -421,6 +534,35 @@ export default function Home() {
             <div>
               <h3 className="text-sm font-semibold text-slate-300 mb-3">Progress this KvK</h3>
               <StatsCharts data={result.chartData} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-300 mb-3">Compare against another KvK</h3>
+              <select
+                className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm mb-3"
+                value={govCompareEventId}
+                onChange={(e) => compareGovernor(e.target.value)}
+              >
+                <option value="">Pick a KvK to compare {govId.trim()} against...</option>
+                {events.filter((ev) => String(ev.id) !== String(selectedEventId)).map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name}</option>
+                ))}
+              </select>
+              {govCompareLoading ? (
+                <p className="text-sm text-slate-500">Loading...</p>
+              ) : govCompareEventId && govCompareData ? (
+                <BarCompareChart
+                  data={[
+                    { name: "T4 Kills", A: result.totalDelta.t4_kills, B: govCompareData.t4_kills },
+                    { name: "T5 Kills", A: result.totalDelta.t5_kills, B: govCompareData.t5_kills },
+                    { name: "Deaths", A: result.totalDelta.deaths, B: govCompareData.deaths },
+                    { name: "Points", A: result.points, B: govCompareData.points },
+                  ]}
+                  labelA={result.eventName}
+                  labelB={events.find((e) => String(e.id) === String(govCompareEventId))?.name}
+                />
+              ) : govCompareEventId ? (
+                <p className="text-sm text-slate-500">No stats found for {govId.trim()} in that KvK.</p>
+              ) : null}
             </div>
           </div>
         )}
