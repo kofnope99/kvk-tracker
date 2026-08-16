@@ -18,6 +18,9 @@ export default function Home() {
   const [allianceTotals, setAllianceTotals] = useState(null);
   const [allianceLoading, setAllianceLoading] = useState(true);
 
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+
   const [linkMain, setLinkMain] = useState("");
   const [linkFarm, setLinkFarm] = useState("");
   const [linkMsg, setLinkMsg] = useState("");
@@ -94,6 +97,56 @@ export default function Home() {
     })();
   }, [selectedEventId]);
 
+  // Builds the top-kills / top-deaths leaderboards for whichever KvK and
+  // snapshot is currently selected. Farm accounts aren't listed on their
+  // own -- their (20%-weighted) stats are folded into their main account.
+  useEffect(() => {
+    if (!selectedEventId || snapshots.length === 0 || !selectedSnapshotId) {
+      setLeaderboard(null);
+      return;
+    }
+    (async () => {
+      setLeaderboardLoading(true);
+      const baseline = snapshots.length > 1 ? (snapshots.find((s) => s.is_baseline) || snapshots[0]) : null;
+      const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
+      if (!latest) { setLeaderboard(null); setLeaderboardLoading(false); return; }
+
+      const snapshotIds = baseline ? [baseline.id, latest.id] : [latest.id];
+      const { data: rows } = await supabasePublic
+        .from("governor_stats").select("*").in("snapshot_id", snapshotIds);
+      const baselineRows = baseline ? (rows || []).filter((r) => r.snapshot_id === baseline.id) : [];
+      const latestRows = (rows || []).filter((r) => r.snapshot_id === latest.id);
+
+      const { data: links } = await supabasePublic.from("account_links").select("*").eq("status", "approved");
+      const farmIds = new Set((links || []).map((l) => l.farm_governor_id));
+      const farmsByMain = {};
+      for (const l of links || []) (farmsByMain[l.main_governor_id] ||= []).push(l.farm_governor_id);
+
+      const totals = [];
+      for (const l of latestRows) {
+        if (farmIds.has(l.governor_id)) continue; // shown under their main instead
+        const b = baselineRows.find((r) => r.governor_id === l.governor_id);
+        const d = computeDelta(b, l);
+        let kills = d.t4_kills + d.t5_kills;
+        let deaths = d.deaths;
+        for (const farmId of farmsByMain[l.governor_id] || []) {
+          const fl = latestRows.find((r) => r.governor_id === farmId);
+          if (!fl) continue;
+          const fb = baselineRows.find((r) => r.governor_id === farmId);
+          const fd = computeDelta(fb, fl);
+          kills += (fd.t4_kills + fd.t5_kills) * 0.2;
+          deaths += fd.deaths * 0.2;
+        }
+        totals.push({ id: l.governor_id, name: l.governor_name || l.governor_id, kills, deaths });
+      }
+
+      const topKills = [...totals].sort((a, b) => b.kills - a.kills).slice(0, 15);
+      const topDeaths = [...totals].sort((a, b) => b.deaths - a.deaths).slice(0, 10);
+      setLeaderboard({ topKills, topDeaths });
+      setLeaderboardLoading(false);
+    })();
+  }, [selectedEventId, selectedSnapshotId, snapshots]);
+
   async function search() {
     setError("");
     setResult(null);
@@ -153,7 +206,11 @@ export default function Home() {
         .eq("kvk_event_id", selectedEventId)
         .order("min_power", { ascending: true });
 
-      // combine main + farms
+      // combine main + farms -- a linked farm account only counts 20% of
+      // its kills and deaths toward the main account (power and the
+      // informational stats stay at full value).
+      const FARM_WEIGHT = 0.2;
+      const mainId = govId.trim();
       let totalDelta = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
       const perAccount = [];
       for (const id of allIds) {
@@ -161,11 +218,12 @@ export default function Home() {
         const l = latestRows?.find((r) => r.governor_id === id);
         if (!l) continue;
         const d = computeDelta(b, l);
-        perAccount.push({ id, name: l.governor_name, delta: d });
+        const w = id === mainId ? 1 : FARM_WEIGHT;
+        perAccount.push({ id, name: l.governor_name, delta: d, weight: w });
         totalDelta.power += d.power;
-        totalDelta.t4_kills += d.t4_kills;
-        totalDelta.t5_kills += d.t5_kills;
-        totalDelta.deaths += d.deaths;
+        totalDelta.t4_kills += d.t4_kills * w;
+        totalDelta.t5_kills += d.t5_kills * w;
+        totalDelta.deaths += d.deaths * w;
         totalDelta.acclaims += d.acclaims;
         totalDelta.healed_troops += d.healed_troops;
         totalDelta.trades += d.trades;
@@ -186,10 +244,11 @@ export default function Home() {
           const l = rows.find((r) => r.governor_id === id);
           if (!l) continue;
           const delta = computeDelta(b, l);
+          const w = id === mainId ? 1 : FARM_WEIGHT;
           d.power += delta.power;
-          d.t4_kills += delta.t4_kills;
-          d.t5_kills += delta.t5_kills;
-          d.deaths += delta.deaths;
+          d.t4_kills += delta.t4_kills * w;
+          d.t5_kills += delta.t5_kills * w;
+          d.deaths += delta.deaths * w;
         }
         return { label: s.label, points: computePoints(d, rules), t4_kills: d.t4_kills, t5_kills: d.t5_kills, deaths: d.deaths };
       });
@@ -249,9 +308,7 @@ export default function Home() {
         )}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Check your stats</h2>
-
+      <section className="bg-slate-900 rounded-xl p-6 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <select
             className="rounded-lg bg-slate-800 px-3 py-2 text-sm"
@@ -272,6 +329,45 @@ export default function Home() {
             ))}
           </select>
         </div>
+        <p className="text-xs text-slate-500">This picker controls both the leaderboards below and the governor search further down.</p>
+      </section>
+
+      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
+        <h2 className="text-lg font-semibold">Top governors</h2>
+        {leaderboardLoading ? (
+          <p className="text-sm text-slate-500">Loading...</p>
+        ) : leaderboard && (leaderboard.topKills.length > 0 || leaderboard.topDeaths.length > 0) ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm text-slate-400 mb-2">Top 15 — kills</p>
+              <ol className="text-sm space-y-1">
+                {leaderboard.topKills.map((g, i) => (
+                  <li key={g.id} className="flex justify-between text-slate-300">
+                    <span>{i + 1}. {g.name}</span>
+                    <span className="text-slate-400">{Math.round(g.kills).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <p className="text-sm text-slate-400 mb-2">Top 10 — deaths</p>
+              <ol className="text-sm space-y-1">
+                {leaderboard.topDeaths.map((g, i) => (
+                  <li key={g.id} className="flex justify-between text-slate-300">
+                    <span>{i + 1}. {g.name}</span>
+                    <span className="text-slate-400">{Math.round(g.deaths).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">No stats uploaded yet for this KvK.</p>
+        )}
+      </section>
+
+      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
+        <h2 className="text-lg font-semibold">Check your stats</h2>
 
         <div className="flex gap-2">
           <input
@@ -336,7 +432,9 @@ export default function Home() {
                 <p className="text-sm text-slate-400 mb-2">Linked accounts included:</p>
                 <ul className="text-sm space-y-1">
                   {result.perAccount.map((a) => (
-                    <li key={a.id} className="text-slate-300">{a.name || a.id} ({a.id})</li>
+                    <li key={a.id} className="text-slate-300">
+                      {a.name || a.id} ({a.id}){a.weight < 1 ? ` — farm, counted at ${Math.round(a.weight * 100)}%` : " — main"}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -352,7 +450,7 @@ export default function Home() {
       <section className="bg-slate-900 rounded-xl p-6 space-y-4">
         <h2 className="text-lg font-semibold">Link a farm account</h2>
         <p className="text-sm text-slate-400">
-          Submit your main Governor ID and your farm's Governor ID. An admin will approve it, then your farm's kills/deaths will count toward your total automatically.
+          Submit your main Governor ID and your farm's Governor ID. An admin will approve it, then your farm's kills and deaths will count toward your total automatically — at 20% weight (power and other stats aren't affected).
         </p>
         <form onSubmit={submitLink} className="flex flex-col sm:flex-row gap-2">
           <input className="flex-1 rounded-lg bg-slate-800 px-3 py-2" placeholder="Your MAIN Governor ID"
