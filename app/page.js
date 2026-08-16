@@ -50,14 +50,17 @@ export default function Home() {
           .select("*")
           .eq("kvk_event_id", ev.id)
           .order("uploaded_at", { ascending: true });
-        if (!snaps || snaps.length < 2) continue; // need at least baseline + one more upload
+        if (!snaps || snaps.length < 1) continue;
 
-        const baseline = snaps.find((s) => s.is_baseline) || snaps[0];
+        const baseline = snaps.length > 1 ? (snaps.find((s) => s.is_baseline) || snaps[0]) : null;
         const latest = snaps[snaps.length - 1];
-        if (baseline.id === latest.id) continue;
+        if (baseline && baseline.id === latest.id) continue;
 
-        const { data: baselineRows } = await supabasePublic
-          .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", baseline.id);
+        const baselineRows = baseline
+          ? (await supabasePublic
+              .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", baseline.id)
+            ).data
+          : [];
         const { data: latestRows } = await supabasePublic
           .from("governor_stats").select("governor_id,t4_kills,t5_kills,deaths").eq("snapshot_id", latest.id);
 
@@ -101,11 +104,14 @@ export default function Home() {
     }
     setLoading(true);
     try {
-      const baseline = snapshots.find((s) => s.is_baseline) || snapshots[0];
+      // With only one snapshot uploaded for this KvK, there's nothing to
+      // compare it against -- treat it as starting from zero so the
+      // numbers shown are that file's totals, not a delta against itself.
+      const baseline = snapshots.length > 1 ? (snapshots.find((s) => s.is_baseline) || snapshots[0]) : null;
       const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
       const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name || "";
 
-      if (!baseline || !latest) {
+      if (!latest) {
         setError("No stats uploaded yet for that KvK.");
         return;
       }
@@ -128,7 +134,7 @@ export default function Home() {
         .in("snapshot_id", snapshotIds)
         .in("governor_id", allIds);
 
-      const baselineRows = (allRows || []).filter((r) => r.snapshot_id === baseline.id);
+      const baselineRows = baseline ? (allRows || []).filter((r) => r.snapshot_id === baseline.id) : [];
       const latestRows = (allRows || []).filter((r) => r.snapshot_id === latest.id);
 
       if (!latestRows || latestRows.length === 0) {
@@ -190,7 +196,7 @@ export default function Home() {
 
       setResult({
         eventName,
-        baselineLabel: baseline.label,
+        baselineLabel: baseline ? baseline.label : "zero (only one snapshot uploaded)",
         latestLabel: latest.label,
         isLatestOverall: String(latest.id) === String(snapshots[snapshots.length - 1]?.id),
         perAccount,
