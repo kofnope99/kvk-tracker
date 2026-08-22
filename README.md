@@ -17,8 +17,9 @@ between them. Takes about 20-30 minutes the first time.
    paste it into the SQL editor, and click **Run**. This creates all the
    tables the site needs.
    (If you had already run an older version of this schema, run
-   `supabase/migration_add_display_stats.sql` too — it just adds the
-   Acclaims/Healed/Trades columns without touching your existing data.)
+   `supabase/migration_add_display_stats.sql` and
+   `supabase/migration_add_mge_applications.sql` too — both just add
+   new pieces without touching your existing data.)
 5. Click **Project Settings** (gear icon) → **API**. You'll need three
    values from this page in step 3 below:
    - `Project URL`
@@ -92,10 +93,72 @@ in the browser is fine and needs zero setup.)
   approve/reject it from the admin panel, and it auto-combines their
   stats afterward.
 
-- The very top of the homepage shows alliance-wide totals — total kills
-  (T4 + T5 broken out) and total deaths, added up across every governor
-  and every KvK you've ever uploaded. This updates automatically as you
-  upload new snapshots, no extra setup needed.
+- Two more comparison views: a **"Compare KvKs — alliance totals"**
+  section (pick any two KvKs, see T4/T5 kills and deaths as grouped
+  bars), and, after searching a Governor ID, a **"Compare against
+  another KvK"** picker that bar-charts that governor's T4/T5 kills,
+  deaths, and points between their current KvK and any other one —
+  farm-account weighting applies here too.
+- The **Alliance totals** and **Top governors** sections both follow
+  whichever KvK and snapshot you pick in the selector above them —
+  pick a different KvK to see its totals and leaderboard instead.
+  There's no need to mark anything "active" just to view historical
+  data; "active" only controls which KvK loads by default when someone
+  first opens the site.
+
+- The homepage also shows a **Top governors** leaderboard — top 15 by
+  kills, top 10 by deaths — for whichever KvK and snapshot is picked
+  in the selector. Farm accounts don't appear as their own leaderboard
+  entries; their (weighted) stats are folded into their main account.
+- When a farm account is linked and approved, only **20% of its kills
+  and deaths** count toward the main account's total (power and the
+  informational stats are unaffected). This applies everywhere a
+  governor's combined stats show up — search results, the charts, and
+  the leaderboard.
+- Uploaded a snapshot by mistake? In the admin panel's Upload section,
+  every snapshot for the currently selected KvK is listed with a
+  Delete button — deleting one removes that upload and all its
+  governor stats, and doesn't affect any other snapshot.
+
+## Look & feel
+
+The site uses a "field ops ledger" visual style — gunmetal background,
+brass/drab/flare accent colors, a stenciled display typeface for
+headers, and monospace figures for stat numbers so they line up like
+a real ledger. Pass/fail shows as a rotated ink-stamp badge. If you
+ever want the palette or fonts changed, just tell me what direction
+you'd prefer and I'll rework the tokens in `tailwind.config.js` and
+`app/globals.css` — the rest of the site pulls from those automatically.
+
+- The homepage search box now accepts a **Governor ID or a name**. If
+  more than one governor matches a typed name, a picker shows up so
+  the right one can be chosen.
+- There's a public **MGE application page** at `yoursite.vercel.app/mge`
+  — players enter their Governor ID and name, which (1) posts to your
+  Discord admin channel along with their current Power/T4/T5/Deaths for
+  the active KvK, and (2) shows up in the admin panel under "MGE
+  applications," where their stats are shown and each entry can be
+  deleted manually. Applications older than 14 days are deleted
+  automatically the next time the admin panel loads that section —
+  this data is intentionally temporary, not archived.
+
+## Setting up the Discord webhook (for MGE applications)
+
+1. In Discord, go to your admin channel → click the gear icon (Edit
+   Channel) → **Integrations** → **Webhooks** → **New Webhook**.
+2. Name it (e.g. "MGE Applications"), make sure it's pointed at the
+   right channel, then click **Copy Webhook URL**.
+3. In Vercel, go to your project → Settings → Environment Variables →
+   add `DISCORD_WEBHOOK_URL` with that pasted URL, then redeploy (or
+   just wait for your next commit to trigger one).
+
+If this variable isn't set, the application page still works and
+still saves to the admin panel — it just won't post to Discord.
+
+- The homepage now opens with a hero banner (with a "Last dispatch"
+  timestamp showing when stats were last uploaded) and quick nav tabs
+  to the MGE application page and the admin panel — no more needing
+  to type `/mge` in directly.
 
 ## Notes & limits (so nothing surprises you)
 

@@ -29,6 +29,30 @@ export default function AdminPage() {
   const [requirements, setRequirements] = useState([]);
 
   const [pendingLinks, setPendingLinks] = useState([]);
+  const [eventSnapshots, setEventSnapshots] = useState([]);
+  const [mgeApplications, setMgeApplications] = useState([]);
+  const [mgeStats, setMgeStats] = useState({});
+  const [mgeLoading, setMgeLoading] = useState(false);
+
+  async function refreshEventSnapshots(eventId) {
+    if (!eventId) return;
+    const { data } = await supabasePublic
+      .from("snapshots")
+      .select("*")
+      .eq("kvk_event_id", eventId)
+      .order("uploaded_at", { ascending: true });
+    setEventSnapshots(data || []);
+  }
+
+  async function deleteSnapshot(id) {
+    if (!confirm("Delete this snapshot and all its governor stats? This can't be undone.")) return;
+    await fetch("/api/admin/delete-snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    refreshEventSnapshots(selectedEvent);
+  }
 
   async function refreshEvents() {
     const { data } = await supabasePublic.from("kvk_events").select("*").order("id", { ascending: false });
@@ -45,14 +69,51 @@ export default function AdminPage() {
     setPendingLinks(data || []);
   }
 
+  async function refreshMgeApplications() {
+    setMgeLoading(true);
+    const res = await fetch("/api/admin/mge-applications", { method: "POST" });
+    const data = await res.json();
+    setMgeApplications(data.ok ? data.applications : []);
+    setMgeLoading(false);
+  }
+
+  // Looks up each applicant's current stats once both the application
+  // list and the selected event's snapshots are loaded (they load on
+  // separate async paths, so this reruns whichever finishes last).
+  useEffect(() => {
+    if (mgeApplications.length === 0 || eventSnapshots.length === 0) { setMgeStats({}); return; }
+    (async () => {
+      const latest = eventSnapshots[eventSnapshots.length - 1];
+      const ids = mgeApplications.map((a) => a.governor_id);
+      const { data: rows } = await supabasePublic
+        .from("governor_stats").select("*").eq("snapshot_id", latest.id).in("governor_id", ids);
+      const map = {};
+      for (const r of rows || []) map[r.governor_id] = r;
+      setMgeStats(map);
+    })();
+  }, [mgeApplications, eventSnapshots]);
+
+  async function deleteMgeApplication(id) {
+    await fetch("/api/admin/delete-mge-application", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    refreshMgeApplications();
+  }
+
   useEffect(() => {
     if (loggedIn) {
       refreshEvents();
       refreshPendingLinks();
+      refreshMgeApplications();
     }
   }, [loggedIn]);
   useEffect(() => {
-    if (selectedEvent) refreshRequirements(selectedEvent);
+    if (selectedEvent) {
+      refreshRequirements(selectedEvent);
+      refreshEventSnapshots(selectedEvent);
+    }
   }, [selectedEvent]);
 
   async function login(e) {
@@ -90,6 +151,7 @@ export default function AdminPage() {
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
     setUploadMsg(data.ok ? `Saved ${data.rows_saved} rows.` : `Error: ${data.error}`);
+    if (data.ok) refreshEventSnapshots(selectedEvent);
   }
 
   async function saveRules(e) {
@@ -142,12 +204,12 @@ export default function AdminPage() {
   if (!loggedIn) {
     return (
       <main className="max-w-sm mx-auto mt-20">
-        <form onSubmit={login} className="bg-slate-900 rounded-xl p-6 space-y-4">
-          <h1 className="text-lg font-semibold">Admin login</h1>
-          <input type="password" className="w-full rounded-lg bg-slate-800 px-3 py-2" placeholder="Password"
+        <form onSubmit={login} className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+          <h1 className="font-display text-lg uppercase tracking-wide text-paper">Admin Login</h1>
+          <input type="password" className="w-full rounded-sm bg-panel2 px-3 py-2" placeholder="Password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
-          {loginError && <p className="text-red-400 text-sm">{loginError}</p>}
-          <button className="w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg font-medium">Log in</button>
+          {loginError && <p className="text-flareBright text-sm">{loginError}</p>}
+          <button className="w-full bg-brass hover:bg-brassBright text-ink py-2 rounded-sm font-semibold">Log in</button>
         </form>
       </main>
     );
@@ -156,95 +218,150 @@ export default function AdminPage() {
   return (
     <main className="space-y-8">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Admin panel</h1>
-        <a href="/" className="text-sm text-slate-400 hover:text-slate-200">← Back to site</a>
+        <h1 className="font-display text-2xl uppercase tracking-wide text-paper">Admin Panel</h1>
+        <a href="/" className="text-sm text-steel hover:text-paper">← Back to site</a>
       </header>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="font-semibold">KvK Events</h2>
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">KvK Events</h2>
         <form onSubmit={createEvent} className="flex gap-2">
-          <input className="flex-1 rounded-lg bg-slate-800 px-3 py-2" placeholder="e.g. KvK Season 5"
+          <input className="flex-1 rounded-sm bg-panel2 px-3 py-2" placeholder="e.g. KvK Season 5"
             value={newEventName} onChange={(e) => setNewEventName(e.target.value)} required />
-          <button className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg">Create</button>
+          <button className="bg-panel2 hover:bg-panel3 px-4 py-2 rounded-sm">Create</button>
         </form>
-        <select className="w-full rounded-lg bg-slate-800 px-3 py-2" value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)}>
+        <select className="w-full rounded-sm bg-panel2 px-3 py-2" value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)}>
           {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}{ev.is_active ? " (active)" : ""}</option>)}
         </select>
         <div className="flex items-center justify-between">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-steelDim">
             "Active" is the one governors see by default on the homepage. Uploading, point values, and requirements all still work on any event you pick above, active or not.
           </p>
-          <button onClick={activateEvent} className="shrink-0 ml-3 text-xs bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 rounded whitespace-nowrap">
+          <button onClick={activateEvent} className="shrink-0 ml-3 text-xs bg-drab hover:bg-drabBright text-ink font-semibold px-3 py-1.5 rounded whitespace-nowrap">
             Set as active
           </button>
         </div>
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="font-semibold">Upload stats (Excel)</h2>
-        <p className="text-sm text-slate-400">
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Upload stats (Excel)</h2>
+        <p className="text-sm text-steel">
           Columns expected: Governor ID, Name, Power, T4 Kills, T5 Kills, Deaths. Also picked up if present: Acclaims, Healed troops, Trades (shown as info only, not counted in points). Mark the very first upload of a KvK as "baseline" — every later upload is compared against it.
         </p>
         <form onSubmit={upload} className="space-y-3">
           <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files[0])} required className="text-sm" />
-          <input className="w-full rounded-lg bg-slate-800 px-3 py-2" placeholder="Label (e.g. Day 3)"
+          <input className="w-full rounded-sm bg-panel2 px-3 py-2" placeholder="Label (e.g. Day 3)"
             value={label} onChange={(e) => setLabel(e.target.value)} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isBaseline} onChange={(e) => setIsBaseline(e.target.checked)} />
             This is the baseline (first) snapshot for this KvK
           </label>
-          <button className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg font-medium">Upload</button>
+          <button className="bg-brass hover:bg-brassBright text-ink px-4 py-2 rounded-sm font-semibold">Upload</button>
         </form>
-        {uploadMsg && <p className="text-sm text-slate-300">{uploadMsg}</p>}
+        {uploadMsg && <p className="text-sm text-steel">{uploadMsg}</p>}
+
+        {eventSnapshots.length > 0 && (
+          <div className="pt-2">
+            <p className="text-sm text-steel mb-2">Uploaded snapshots for this KvK:</p>
+            <ul className="space-y-2">
+              {eventSnapshots.map((s) => (
+                <li key={s.id} className="flex items-center justify-between bg-panel2 rounded-sm px-3 py-2">
+                  <span className="text-sm">{s.label}{s.is_baseline ? " (baseline)" : ""}</span>
+                  <button onClick={() => deleteSnapshot(s.id)} className="text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="font-semibold">Point values</h2>
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Point values</h2>
         <form onSubmit={saveRules} className="grid grid-cols-3 gap-3">
-          <label className="text-sm">T4 kill<input type="number" step="0.01" className="w-full rounded-lg bg-slate-800 px-3 py-2 mt-1" value={t4} onChange={(e) => setT4(e.target.value)} /></label>
-          <label className="text-sm">T5 kill<input type="number" step="0.01" className="w-full rounded-lg bg-slate-800 px-3 py-2 mt-1" value={t5} onChange={(e) => setT5(e.target.value)} /></label>
-          <label className="text-sm">Death<input type="number" step="0.01" className="w-full rounded-lg bg-slate-800 px-3 py-2 mt-1" value={deathPts} onChange={(e) => setDeathPts(e.target.value)} /></label>
-          <button className="col-span-3 bg-slate-700 hover:bg-slate-600 py-2 rounded-lg">Save point values</button>
+          <label className="text-sm">T4 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={t4} onChange={(e) => setT4(e.target.value)} /></label>
+          <label className="text-sm">T5 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={t5} onChange={(e) => setT5(e.target.value)} /></label>
+          <label className="text-sm">Death<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={deathPts} onChange={(e) => setDeathPts(e.target.value)} /></label>
+          <button className="col-span-3 bg-panel2 hover:bg-panel3 py-2 rounded-sm">Save point values</button>
         </form>
-        {rulesMsg && <p className="text-sm text-slate-300">{rulesMsg}</p>}
+        {rulesMsg && <p className="text-sm text-steel">{rulesMsg}</p>}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="font-semibold">Minimum requirements by power</h2>
-        <p className="text-sm text-slate-400">
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Minimum requirements by power</h2>
+        <p className="text-sm text-steel">
           Enter your existing tiers exactly like your "Minimum" sheet (min death count, min kill count per power bracket). The site converts these into a points target automatically using your point values above (min kills × T5 weight + min deaths × Death weight — same as your spreadsheet's Min. Contribution formula).
         </p>
         <form onSubmit={addRequirement} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <input className="rounded-lg bg-slate-800 px-3 py-2" placeholder="Min power" value={minPower} onChange={(e) => setMinPower(e.target.value)} required />
-          <input className="rounded-lg bg-slate-800 px-3 py-2" placeholder="Max power (blank = no cap)" value={maxPower} onChange={(e) => setMaxPower(e.target.value)} />
-          <input className="rounded-lg bg-slate-800 px-3 py-2" placeholder="Min deaths" value={minDeaths} onChange={(e) => setMinDeaths(e.target.value)} required />
-          <input className="rounded-lg bg-slate-800 px-3 py-2" placeholder="Min kills" value={minKills} onChange={(e) => setMinKills(e.target.value)} required />
-          <button className="col-span-2 sm:col-span-4 bg-slate-700 hover:bg-slate-600 py-2 rounded-lg">Add tier</button>
+          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min power" value={minPower} onChange={(e) => setMinPower(e.target.value)} required />
+          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Max power (blank = no cap)" value={maxPower} onChange={(e) => setMaxPower(e.target.value)} />
+          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min deaths" value={minDeaths} onChange={(e) => setMinDeaths(e.target.value)} required />
+          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min kills" value={minKills} onChange={(e) => setMinKills(e.target.value)} required />
+          <button className="col-span-2 sm:col-span-4 bg-panel2 hover:bg-panel3 py-2 rounded-sm">Add tier</button>
         </form>
-        {reqMsg && <p className="text-sm text-slate-300">{reqMsg}</p>}
+        {reqMsg && <p className="text-sm text-steel">{reqMsg}</p>}
         <ul className="text-sm space-y-1">
           {requirements.map((r) => (
-            <li key={r.id} className="text-slate-300">
+            <li key={r.id} className="text-steel">
               {r.min_power.toLocaleString()} – {r.max_power ? r.max_power.toLocaleString() : "∞"} power → min {r.min_deaths.toLocaleString()} deaths, {r.min_kills.toLocaleString()} kills
             </li>
           ))}
         </ul>
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="font-semibold">Pending farm-link requests</h2>
-        {pendingLinks.length === 0 && <p className="text-sm text-slate-400">None right now.</p>}
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Pending farm-link requests</h2>
+        {pendingLinks.length === 0 && <p className="text-sm text-steel">None right now.</p>}
         <ul className="space-y-2">
           {pendingLinks.map((l) => (
-            <li key={l.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-3 py-2">
+            <li key={l.id} className="flex items-center justify-between bg-panel2 rounded-sm px-3 py-2">
               <span className="text-sm">Main: {l.main_governor_id} ← Farm: {l.farm_governor_id}</span>
               <span className="flex gap-2">
-                <button onClick={() => decideLink(l.id, "approved")} className="text-xs bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded">Approve</button>
-                <button onClick={() => decideLink(l.id, "rejected")} className="text-xs bg-red-600 hover:bg-red-500 px-3 py-1 rounded">Reject</button>
+                <button onClick={() => decideLink(l.id, "approved")} className="text-xs bg-drab hover:bg-drabBright text-ink font-semibold px-3 py-1 rounded">Approve</button>
+                <button onClick={() => decideLink(l.id, "rejected")} className="text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">Reject</button>
               </span>
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg uppercase tracking-wide text-paper">MGE applications</h2>
+          <span className="font-data text-[10px] text-steelDim uppercase">Auto-deleted after 14 days</span>
+        </div>
+        <p className="text-xs text-steelDim">
+          Share this link with players: <span className="font-data">yoursite.vercel.app/mge</span>. Stats shown are from the latest snapshot of whichever KvK is selected above.
+        </p>
+        {mgeLoading ? (
+          <p className="text-sm text-steelDim">Loading...</p>
+        ) : mgeApplications.length === 0 ? (
+          <p className="text-sm text-steel">No applications right now.</p>
+        ) : (
+          <ul className="space-y-2">
+            {mgeApplications.map((a) => {
+              const stats = mgeStats[a.governor_id];
+              return (
+                <li key={a.id} className="bg-panel2 rounded-sm border border-hairline px-3 py-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-paper">{a.governor_name} <span className="font-data text-steelDim">({a.governor_id})</span></p>
+                    <p className="font-data text-xs text-steel mt-0.5">
+                      {stats
+                        ? `Power ${Number(stats.power).toLocaleString()} · T4 ${Number(stats.t4_kills).toLocaleString()} · T5 ${Number(stats.t5_kills).toLocaleString()} · Deaths ${Number(stats.deaths).toLocaleString()}`
+                        : "No stats found for this KvK"}
+                    </p>
+                    <p className="font-data text-[10px] text-steelDim mt-0.5">
+                      Applied {new Date(a.submitted_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button onClick={() => deleteMgeApplication(a.id)} className="shrink-0 text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
+                    Delete
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
     </main>
   );

@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { supabasePublic } from "../lib/supabaseClient";
 import { computeDelta, computePoints, findRequirementTier, computeRequiredPoints } from "../lib/points";
 import StatsCharts from "./StatsCharts";
+import { Crosshair, Skull, ScrollText, Shield, Radio } from "lucide-react";
 import BarCompareChart from "./BarCompareChart";
 
 // Shared helpers for KvK-vs-KvK comparisons -- fetch a single event's
@@ -61,6 +62,8 @@ async function computeGovernorTotalsForEvent(eventId, mainGovId) {
 
 export default function Home() {
   const [govId, setGovId] = useState("");
+  const [resolvedGovId, setResolvedGovId] = useState("");
+  const [nameMatches, setNameMatches] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -178,7 +181,7 @@ export default function Home() {
         totalDeaths += d.deaths;
       }
       const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name;
-      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName });
+      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName, updatedAt: latest.uploaded_at });
       setAllianceLoading(false);
 
       const { data: links } = await supabasePublic.from("account_links").select("*").eq("status", "approved");
@@ -214,123 +217,45 @@ export default function Home() {
   async function search() {
     setError("");
     setResult(null);
+    setNameMatches(null);
     setGovCompareEventId("");
     setGovCompareData(null);
-    if (!govId.trim()) return;
+    const query = govId.trim();
+    if (!query) return;
     if (!selectedEventId || !selectedSnapshotId) {
       setError("No stats uploaded yet for that KvK.");
       return;
     }
     setLoading(true);
     try {
-      // With only one snapshot uploaded for this KvK, there's nothing to
-      // compare it against -- treat it as starting from zero so the
-      // numbers shown are that file's totals, not a delta against itself.
-      const baseline = snapshots.length > 1 ? (snapshots.find((s) => s.is_baseline) || snapshots[0]) : null;
       const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
-      const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name || "";
-
       if (!latest) {
         setError("No stats uploaded yet for that KvK.");
         return;
       }
 
-      // find approved farm links for this governor
-      const { data: links } = await supabasePublic
-        .from("account_links")
-        .select("*")
-        .eq("main_governor_id", govId.trim())
-        .eq("status", "approved");
+      // Try an exact Governor ID match first; fall back to a name search.
+      const { data: idRow } = await supabasePublic
+        .from("governor_stats").select("governor_id,governor_name")
+        .eq("snapshot_id", latest.id).eq("governor_id", query).maybeSingle();
 
-      const allIds = [govId.trim(), ...(links || []).map((l) => l.farm_governor_id)];
-
-      // Pull every snapshot's rows for this governor (+ farms) in one go,
-      // both to compute the current view and to build the history chart.
-      const snapshotIds = snapshots.map((s) => s.id);
-      const { data: allRows } = await supabasePublic
-        .from("governor_stats")
-        .select("*")
-        .in("snapshot_id", snapshotIds)
-        .in("governor_id", allIds);
-
-      const baselineRows = baseline ? (allRows || []).filter((r) => r.snapshot_id === baseline.id) : [];
-      const latestRows = (allRows || []).filter((r) => r.snapshot_id === latest.id);
-
-      if (!latestRows || latestRows.length === 0) {
-        setError("Governor ID not found in that snapshot's stats.");
-        return;
-      }
-
-      const { data: rules } = await supabasePublic
-        .from("point_rules")
-        .select("*")
-        .eq("kvk_event_id", selectedEventId);
-
-      const { data: requirements } = await supabasePublic
-        .from("power_requirements")
-        .select("*")
-        .eq("kvk_event_id", selectedEventId)
-        .order("min_power", { ascending: true });
-
-      // combine main + farms -- a linked farm account only counts 20% of
-      // its kills and deaths toward the main account (power and the
-      // informational stats stay at full value).
-      const FARM_WEIGHT = 0.2;
-      const mainId = govId.trim();
-      let totalDelta = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
-      const perAccount = [];
-      for (const id of allIds) {
-        const b = baselineRows?.find((r) => r.governor_id === id);
-        const l = latestRows?.find((r) => r.governor_id === id);
-        if (!l) continue;
-        const d = computeDelta(b, l);
-        const w = id === mainId ? 1 : FARM_WEIGHT;
-        perAccount.push({ id, name: l.governor_name, delta: d, weight: w });
-        totalDelta.power += d.power;
-        totalDelta.t4_kills += d.t4_kills * w;
-        totalDelta.t5_kills += d.t5_kills * w;
-        totalDelta.deaths += d.deaths * w;
-        totalDelta.acclaims += d.acclaims;
-        totalDelta.healed_troops += d.healed_troops;
-        totalDelta.trades += d.trades;
-      }
-
-      const points = computePoints(totalDelta, rules);
-      const tier = findRequirementTier(totalDelta.power, requirements);
-      const requirement = computeRequiredPoints(tier, rules);
-
-      // Build the "progress over time" series: one point per snapshot
-      // up through the one currently being viewed.
-      const viewIndex = snapshots.findIndex((s) => String(s.id) === String(latest.id));
-      const chartData = snapshots.slice(0, viewIndex + 1).map((s) => {
-        const rows = (allRows || []).filter((r) => r.snapshot_id === s.id);
-        let d = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
-        for (const id of allIds) {
-          const b = baselineRows.find((r) => r.governor_id === id);
-          const l = rows.find((r) => r.governor_id === id);
-          if (!l) continue;
-          const delta = computeDelta(b, l);
-          const w = id === mainId ? 1 : FARM_WEIGHT;
-          d.power += delta.power;
-          d.t4_kills += delta.t4_kills * w;
-          d.t5_kills += delta.t5_kills * w;
-          d.deaths += delta.deaths * w;
+      let id = idRow?.governor_id;
+      if (!id) {
+        const { data: matches } = await supabasePublic
+          .from("governor_stats").select("governor_id,governor_name")
+          .eq("snapshot_id", latest.id).ilike("governor_name", `%${query}%`);
+        const unique = Array.from(new Map((matches || []).map((r) => [r.governor_id, r])).values());
+        if (unique.length === 0) {
+          setError("No governor found with that ID or name.");
+          return;
         }
-        return { label: s.label, points: computePoints(d, rules), t4_kills: d.t4_kills, t5_kills: d.t5_kills, deaths: d.deaths };
-      });
-
-      setResult({
-        eventName,
-        baselineLabel: baseline ? baseline.label : "zero (only one snapshot uploaded)",
-        latestLabel: latest.label,
-        isLatestOverall: String(latest.id) === String(snapshots[snapshots.length - 1]?.id),
-        perAccount,
-        totalDelta,
-        points,
-        requirement,
-        tier,
-        chartData,
-      });
+        if (unique.length > 1) {
+          setNameMatches(unique);
+          return;
+        }
+        id = unique[0].governor_id;
+      }
+      await runSearchForId(id);
     } catch (e) {
       setError("Something went wrong. Try again.");
     } finally {
@@ -338,11 +263,122 @@ export default function Home() {
     }
   }
 
+  function pickNameMatch(id) {
+    setNameMatches(null);
+    setLoading(true);
+    runSearchForId(id).finally(() => setLoading(false));
+  }
+
+  async function runSearchForId(id) {
+    setResolvedGovId(id);
+    const baseline = snapshots.length > 1 ? (snapshots.find((s) => s.is_baseline) || snapshots[0]) : null;
+    const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
+    const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name || "";
+    if (!latest) { setError("No stats uploaded yet for that KvK."); return; }
+
+    // find approved farm links for this governor
+    const { data: links } = await supabasePublic
+      .from("account_links")
+      .select("*")
+      .eq("main_governor_id", id)
+      .eq("status", "approved");
+
+    const allIds = [id, ...(links || []).map((l) => l.farm_governor_id)];
+
+    // Pull every snapshot's rows for this governor (+ farms) in one go,
+    // both to compute the current view and to build the history chart.
+    const snapshotIds = snapshots.map((s) => s.id);
+    const { data: allRows } = await supabasePublic
+      .from("governor_stats")
+      .select("*")
+      .in("snapshot_id", snapshotIds)
+      .in("governor_id", allIds);
+
+    const baselineRows = baseline ? (allRows || []).filter((r) => r.snapshot_id === baseline.id) : [];
+    const latestRows = (allRows || []).filter((r) => r.snapshot_id === latest.id);
+
+    if (!latestRows || latestRows.length === 0) {
+      setError("Governor ID not found in that snapshot's stats.");
+      return;
+    }
+
+    const { data: rules } = await supabasePublic
+      .from("point_rules")
+      .select("*")
+      .eq("kvk_event_id", selectedEventId);
+
+    const { data: requirements } = await supabasePublic
+      .from("power_requirements")
+      .select("*")
+      .eq("kvk_event_id", selectedEventId)
+      .order("min_power", { ascending: true });
+
+    // combine main + farms -- a linked farm account only counts 20% of
+    // its kills and deaths toward the main account (power and the
+    // informational stats stay at full value).
+    const FARM_WEIGHT = 0.2;
+    const mainId = id;
+    let totalDelta = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
+    const perAccount = [];
+    for (const gid of allIds) {
+      const b = baselineRows?.find((r) => r.governor_id === gid);
+      const l = latestRows?.find((r) => r.governor_id === gid);
+      if (!l) continue;
+      const d = computeDelta(b, l);
+      const w = gid === mainId ? 1 : FARM_WEIGHT;
+      perAccount.push({ id: gid, name: l.governor_name, delta: d, weight: w });
+      totalDelta.power += d.power;
+      totalDelta.t4_kills += d.t4_kills * w;
+      totalDelta.t5_kills += d.t5_kills * w;
+      totalDelta.deaths += d.deaths * w;
+      totalDelta.acclaims += d.acclaims;
+      totalDelta.healed_troops += d.healed_troops;
+      totalDelta.trades += d.trades;
+    }
+
+    const points = computePoints(totalDelta, rules);
+    const tier = findRequirementTier(totalDelta.power, requirements);
+    const requirement = computeRequiredPoints(tier, rules);
+
+    // Build the "progress over time" series: one point per snapshot
+    // up through the one currently being viewed.
+    const viewIndex = snapshots.findIndex((s) => String(s.id) === String(latest.id));
+    const chartData = snapshots.slice(0, viewIndex + 1).map((s) => {
+      const rows = (allRows || []).filter((r) => r.snapshot_id === s.id);
+      let d = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
+      for (const gid of allIds) {
+        const b = baselineRows.find((r) => r.governor_id === gid);
+        const l = rows.find((r) => r.governor_id === gid);
+        if (!l) continue;
+        const delta = computeDelta(b, l);
+        const w = gid === mainId ? 1 : FARM_WEIGHT;
+        d.power += delta.power;
+        d.t4_kills += delta.t4_kills * w;
+        d.t5_kills += delta.t5_kills * w;
+        d.deaths += delta.deaths * w;
+      }
+      return { label: s.label, points: computePoints(d, rules), t4_kills: d.t4_kills, t5_kills: d.t5_kills, deaths: d.deaths };
+    });
+
+    setResult({
+      eventName,
+      baselineLabel: baseline ? baseline.label : "zero (only one snapshot uploaded)",
+      latestLabel: latest.label,
+      isLatestOverall: String(latest.id) === String(snapshots[snapshots.length - 1]?.id),
+      perAccount,
+      totalDelta,
+      points,
+      requirement,
+      tier,
+      chartData,
+    });
+  }
+
   async function compareGovernor(eventId) {
     setGovCompareEventId(eventId);
-    if (!eventId || !govId.trim()) { setGovCompareData(null); return; }
+    if (!eventId || !resolvedGovId) { setGovCompareData(null); return; }
     setGovCompareLoading(true);
-    const data = await computeGovernorTotalsForEvent(eventId, govId.trim());
+    const data = await computeGovernorTotalsForEvent(eventId, resolvedGovId);
     setGovCompareData(data);
     setGovCompareLoading(false);
   }
@@ -362,15 +398,45 @@ export default function Home() {
 
   return (
     <main className="space-y-10">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">KvK Governor Tracker</h1>
-        <a href="/admin" className="text-sm text-slate-400 hover:text-slate-200">Admin</a>
+      <header className="dispatch-scan border border-hairline bg-panel rounded-sm px-6 py-8 space-y-5">
+        <div className="flex items-center gap-2">
+          <Radio size={14} className="text-brass" />
+          <p className="font-data text-xs tracking-[0.3em] text-brass uppercase">Field Ledger — Alliance Ops</p>
+        </div>
+
+        <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-wide text-paper leading-none">
+          KvK Governor Tracker
+        </h1>
+
+        <p className="text-sm text-steel max-w-xl">
+          Live kill/death tallies, point thresholds, and pass/fail status for every governor — updated the moment new stats are uploaded.
+        </p>
+
+        {allianceTotals?.updatedAt && (
+          <p className="font-data text-[10px] text-steelDim uppercase tracking-wider">
+            Last dispatch: {new Date(allianceTotals.updatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+          </p>
+        )}
+
+        <nav className="flex flex-wrap gap-2 pt-1">
+          <span className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 border border-brass text-brassBright px-3 py-1.5 rounded-sm">
+            <ScrollText size={13} /> Home
+          </span>
+          <a href="/mge" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
+            <Crosshair size={13} /> MGE Application
+          </a>
+          <a href="/admin" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
+            <Shield size={13} /> Admin
+          </a>
+        </nav>
       </header>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Alliance totals — {allianceTotals?.eventName || "current KvK"}</h2>
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-3">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper flex items-center gap-2">
+          <Crosshair size={16} className="text-brass" /> Alliance totals — {allianceTotals?.eventName || "current KvK"}
+        </h2>
         {allianceLoading ? (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-steelDim">Loading...</p>
         ) : allianceTotals ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Stat label="Total Kills" value={allianceTotals.totalKills.toLocaleString()} />
@@ -379,14 +445,14 @@ export default function Home() {
             <Stat label="Total Deaths" value={allianceTotals.totalDeaths.toLocaleString()} />
           </div>
         ) : (
-          <p className="text-sm text-slate-500">No stats uploaded yet.</p>
+          <p className="text-sm text-steelDim">No stats uploaded yet.</p>
         )}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-3">
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <select
-            className="rounded-lg bg-slate-800 px-3 py-2 text-sm"
+            className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm"
             value={selectedEventId}
             onChange={(e) => setSelectedEventId(e.target.value)}
           >
@@ -395,7 +461,7 @@ export default function Home() {
             ))}
           </select>
           <select
-            className="rounded-lg bg-slate-800 px-3 py-2 text-sm"
+            className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm"
             value={selectedSnapshotId}
             onChange={(e) => setSelectedSnapshotId(e.target.value)}
           >
@@ -404,50 +470,54 @@ export default function Home() {
             ))}
           </select>
         </div>
-        <p className="text-xs text-slate-500">This picker controls both the leaderboards below and the governor search further down.</p>
+        <p className="text-xs text-steelDim">This picker controls both the leaderboards below and the governor search further down.</p>
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Top governors</h2>
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Top governors</h2>
         {leaderboardLoading ? (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-steelDim">Loading...</p>
         ) : leaderboard && (leaderboard.topKills.length > 0 || leaderboard.topDeaths.length > 0) ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <p className="text-sm text-slate-400 mb-2">Top 15 — kills</p>
-              <ol className="text-sm space-y-1">
+              <p className="font-data text-[10px] tracking-widest text-brass uppercase mb-2">Top 15 — Kills</p>
+              <ol className="text-sm space-y-1.5">
                 {leaderboard.topKills.map((g, i) => (
-                  <li key={g.id} className="flex justify-between text-slate-300">
-                    <span>{i + 1}. {g.name}</span>
-                    <span className="text-slate-400">{Math.round(g.kills).toLocaleString()}</span>
+                  <li key={g.id} className="ledger-row text-steel">
+                    <span className="font-data text-steelDim w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="truncate">{g.name}</span>
+                    <span className="leader" />
+                    <span className="font-data font-tnum text-paper">{Math.round(g.kills).toLocaleString()}</span>
                   </li>
                 ))}
               </ol>
             </div>
             <div>
-              <p className="text-sm text-slate-400 mb-2">Top 10 — deaths</p>
-              <ol className="text-sm space-y-1">
+              <p className="font-data text-[10px] tracking-widest text-flareBright uppercase mb-2">Top 10 — Deaths</p>
+              <ol className="text-sm space-y-1.5">
                 {leaderboard.topDeaths.map((g, i) => (
-                  <li key={g.id} className="flex justify-between text-slate-300">
-                    <span>{i + 1}. {g.name}</span>
-                    <span className="text-slate-400">{Math.round(g.deaths).toLocaleString()}</span>
+                  <li key={g.id} className="ledger-row text-steel">
+                    <span className="font-data text-steelDim w-5 shrink-0">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="truncate">{g.name}</span>
+                    <span className="leader" />
+                    <span className="font-data font-tnum text-paper">{Math.round(g.deaths).toLocaleString()}</span>
                   </li>
                 ))}
               </ol>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-slate-500">No stats uploaded yet for this KvK.</p>
+          <p className="text-sm text-steelDim">No stats uploaded yet for this KvK.</p>
         )}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Compare KvKs — alliance totals</h2>
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Compare KvKs — alliance totals</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <select className="rounded-lg bg-slate-800 px-3 py-2 text-sm" value={compareEventA} onChange={(e) => setCompareEventA(e.target.value)}>
+          <select className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm" value={compareEventA} onChange={(e) => setCompareEventA(e.target.value)}>
             {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
           </select>
-          <select className="rounded-lg bg-slate-800 px-3 py-2 text-sm" value={compareEventB} onChange={(e) => setCompareEventB(e.target.value)}>
+          <select className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm" value={compareEventB} onChange={(e) => setCompareEventB(e.target.value)}>
             {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
           </select>
         </div>
@@ -458,29 +528,47 @@ export default function Home() {
         />
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Check your stats</h2>
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Check your stats</h2>
 
         <div className="flex gap-2">
           <input
-            className="flex-1 rounded-lg bg-slate-800 px-3 py-2 outline-none"
-            placeholder="Your Governor ID"
+            className="flex-1 rounded-sm bg-panel2 border border-hairline px-3 py-2 outline-none font-data focus:border-brass"
+            placeholder="Governor ID or name"
             value={govId}
             onChange={(e) => setGovId(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && search()}
           />
-          <button onClick={search} disabled={loading} className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-lg font-medium">
+          <button onClick={search} disabled={loading} className="bg-brass hover:bg-brassBright text-ink px-4 py-2 rounded-sm font-display uppercase tracking-wide">
             {loading ? "Searching..." : "Search"}
           </button>
         </div>
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+        {error && <p className="text-flareBright text-sm">{error}</p>}
+
+        {nameMatches && (
+          <div className="space-y-2">
+            <p className="font-data text-[10px] tracking-widest text-brass uppercase">Multiple matches — pick one</p>
+            <ul className="space-y-1">
+              {nameMatches.map((m) => (
+                <li key={m.governor_id}>
+                  <button
+                    onClick={() => pickNameMatch(m.governor_id)}
+                    className="w-full text-left bg-panel2 hover:bg-panel3 border border-hairline rounded-sm px-3 py-2 text-sm"
+                  >
+                    {m.governor_name} <span className="font-data text-steelDim">({m.governor_id})</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {result && (
           <div className="space-y-4 pt-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-steel">
               {result.eventName} — comparing "{result.baselineLabel}" to "{result.latestLabel}"
               {!result.isLatestOverall && (
-                <span className="text-amber-400"> (viewing a past point, not the newest data)</span>
+                <span className="text-brassBright"> (viewing a past point, not the newest data)</span>
               )}
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -490,30 +578,30 @@ export default function Home() {
               <Stat label="Deaths" value={result.totalDelta.deaths.toLocaleString()} />
             </div>
             <div>
-              <p className="text-xs text-slate-500 mb-2">Not counted toward points — informational only</p>
+              <p className="text-xs text-steelDim mb-2">Not counted toward points — informational only</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <Stat label="Acclaims" value={result.totalDelta.acclaims.toLocaleString()} />
                 <Stat label="Healed Troops" value={result.totalDelta.healed_troops.toLocaleString()} />
                 <Stat label="Trades" value={result.totalDelta.trades.toLocaleString()} />
               </div>
             </div>
-            <div className="flex items-center justify-between bg-slate-800 rounded-lg p-4">
+            <div className="flex items-center justify-between bg-panel2 rounded-sm border border-hairline p-4">
               <div>
-                <p className="text-sm text-slate-400">Points earned</p>
-                <p className="text-2xl font-bold">{result.points.toLocaleString()}</p>
+                <p className="font-data text-[10px] tracking-widest text-steelDim uppercase">Points earned</p>
+                <p className="font-data font-tnum text-2xl text-paper">{result.points.toLocaleString()}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-slate-400">Required</p>
-                <p className={"text-2xl font-bold " + (result.points >= result.requirement ? "text-emerald-400" : "text-red-400")}>
+                <p className="font-data text-[10px] tracking-widest text-steelDim uppercase">Required</p>
+                <p className={"font-data text-2xl font-tnum font-semibold " + (result.points >= result.requirement ? "text-drabBright" : "text-flareBright")}>
                   {result.requirement.toLocaleString()}
                 </p>
-                <p className={"text-xs " + (result.points >= result.requirement ? "text-emerald-400" : "text-red-400")}>
-                  {result.points >= result.requirement ? "PASSING" : "BELOW REQUIREMENT"}
+                <p className={"stamp font-data text-[10px] mt-2 " + (result.points >= result.requirement ? "text-drabBright" : "text-flareBright")}>
+                  {result.points >= result.requirement ? "PASS" : "BELOW MIN"}
                 </p>
                 {result.tier.min_deaths === 0 && result.tier.min_kills === 0 ? (
-                  <p className="text-xs text-slate-500 mt-1">Power below lowest tier — no requirement</p>
+                  <p className="text-xs text-steelDim mt-1">Power below lowest tier — no requirement</p>
                 ) : (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-steelDim mt-1">
                     Tier min: {result.tier.min_deaths.toLocaleString()} deaths / {result.tier.min_kills.toLocaleString()} kills
                   </p>
                 )}
@@ -521,10 +609,10 @@ export default function Home() {
             </div>
             {result.perAccount.length > 1 && (
               <div>
-                <p className="text-sm text-slate-400 mb-2">Linked accounts included:</p>
+                <p className="text-sm text-steel mb-2">Linked accounts included:</p>
                 <ul className="text-sm space-y-1">
                   {result.perAccount.map((a) => (
-                    <li key={a.id} className="text-slate-300">
+                    <li key={a.id} className="text-steel">
                       {a.name || a.id} ({a.id}){a.weight < 1 ? ` — farm, counted at ${Math.round(a.weight * 100)}%` : " — main"}
                     </li>
                   ))}
@@ -532,23 +620,23 @@ export default function Home() {
               </div>
             )}
             <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Progress this KvK</h3>
+              <h3 className="text-sm font-semibold text-steel mb-3">Progress this KvK</h3>
               <StatsCharts data={result.chartData} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">Compare against another KvK</h3>
+              <h3 className="text-sm font-semibold text-steel mb-3">Compare against another KvK</h3>
               <select
-                className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm mb-3"
+                className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm mb-3"
                 value={govCompareEventId}
                 onChange={(e) => compareGovernor(e.target.value)}
               >
-                <option value="">Pick a KvK to compare {govId.trim()} against...</option>
+                <option value="">Pick a KvK to compare {resolvedGovId} against...</option>
                 {events.filter((ev) => String(ev.id) !== String(selectedEventId)).map((ev) => (
                   <option key={ev.id} value={ev.id}>{ev.name}</option>
                 ))}
               </select>
               {govCompareLoading ? (
-                <p className="text-sm text-slate-500">Loading...</p>
+                <p className="text-sm text-steelDim">Loading...</p>
               ) : govCompareEventId && govCompareData ? (
                 <BarCompareChart
                   data={[
@@ -561,26 +649,26 @@ export default function Home() {
                   labelB={events.find((e) => String(e.id) === String(govCompareEventId))?.name}
                 />
               ) : govCompareEventId ? (
-                <p className="text-sm text-slate-500">No stats found for {govId.trim()} in that KvK.</p>
+                <p className="text-sm text-steelDim">No stats found for {resolvedGovId} in that KvK.</p>
               ) : null}
             </div>
           </div>
         )}
       </section>
 
-      <section className="bg-slate-900 rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Link a farm account</h2>
-        <p className="text-sm text-slate-400">
+      <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Link a farm account</h2>
+        <p className="text-sm text-steel">
           Submit your main Governor ID and your farm's Governor ID. An admin will approve it, then your farm's kills and deaths will count toward your total automatically — at 20% weight (power and other stats aren't affected).
         </p>
         <form onSubmit={submitLink} className="flex flex-col sm:flex-row gap-2">
-          <input className="flex-1 rounded-lg bg-slate-800 px-3 py-2" placeholder="Your MAIN Governor ID"
+          <input className="flex-1 rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Your MAIN Governor ID"
             value={linkMain} onChange={(e) => setLinkMain(e.target.value)} required />
-          <input className="flex-1 rounded-lg bg-slate-800 px-3 py-2" placeholder="Your FARM Governor ID"
+          <input className="flex-1 rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Your FARM Governor ID"
             value={linkFarm} onChange={(e) => setLinkFarm(e.target.value)} required />
-          <button className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg font-medium">Request link</button>
+          <button className="bg-panel2 hover:bg-panel3 border border-hairline px-4 py-2 rounded-sm font-display uppercase tracking-wide text-sm">Request link</button>
         </form>
-        {linkMsg && <p className="text-sm text-slate-300">{linkMsg}</p>}
+        {linkMsg && <p className="text-sm text-steel">{linkMsg}</p>}
       </section>
     </main>
   );
@@ -588,9 +676,9 @@ export default function Home() {
 
 function Stat({ label, value }) {
   return (
-    <div className="bg-slate-800 rounded-lg p-3">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-lg font-semibold">{value}</p>
+    <div className="bg-panel2 rounded-sm p-3 border border-hairline">
+      <p className="font-data text-[10px] tracking-widest text-steelDim uppercase">{label}</p>
+      <p className="font-data font-tnum text-lg text-paper">{value}</p>
     </div>
   );
 }

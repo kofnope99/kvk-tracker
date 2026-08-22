@@ -73,3 +73,16 @@ create policy "public read power_requirements" on power_requirements for select 
 create policy "public read account_links" on account_links for select using (true);
 
 create policy "public can request link" on account_links for insert with check (status = 'pending');
+
+-- MGE (event) applications -- deliberately locked down: no public
+-- select policy, since this is temporary data only the admin should
+-- see. The server always writes/reads this using the service role key.
+create table mge_applications (
+  id bigint generated always as identity primary key,
+  governor_id text not null,
+  governor_name text,
+  submitted_at timestamptz default now()
+);
+alter table mge_applications enable row level security;
+-- (no policies added on purpose -- public gets no direct access at all;
+-- only server-side code using the service role key can read/write it)
