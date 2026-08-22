@@ -114,8 +114,10 @@ in the browser is fine and needs zero setup.)
   in the selector. Farm accounts don't appear as their own leaderboard
   entries; their (weighted) stats are folded into their main account.
 - When a farm account is linked and approved, only **20% of its kills
-  and deaths** count toward the main account's total (power and the
-  informational stats are unaffected). This applies everywhere a
+  and deaths** count toward the main account's total. **Power always
+  comes from the main account only** — a farm's power is never added
+  on top, so the power-tier lookup reflects the main account's actual
+  power, not an inflated combined total. This applies everywhere a
   governor's combined stats show up — search results, the charts, and
   the leaderboard.
 - Uploaded a snapshot by mistake? In the admin panel's Upload section,

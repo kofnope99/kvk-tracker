@@ -352,7 +352,7 @@ export default function Home() {
       const d = computeDelta(b, l);
       const w = gid === mainId ? 1 : FARM_WEIGHT;
       perAccount.push({ id: gid, name: l.governor_name, delta: d, weight: w });
-      totalDelta.power += d.power;
+      totalDelta.power += gid === mainId ? d.power : 0;
       totalDelta.t4_kills += d.t4_kills * w;
       totalDelta.t5_kills += d.t5_kills * w;
       totalDelta.deaths += d.deaths * w;
@@ -377,7 +377,7 @@ export default function Home() {
         if (!l) continue;
         const delta = computeDelta(b, l);
         const w = gid === mainId ? 1 : FARM_WEIGHT;
-        d.power += delta.power;
+        d.power += gid === mainId ? delta.power : 0;
         d.t4_kills += delta.t4_kills * w;
         d.t5_kills += delta.t5_kills * w;
         d.deaths += delta.deaths * w;
