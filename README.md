@@ -122,13 +122,15 @@ in the browser is fine and needs zero setup.)
 
 ## Look & feel
 
-The site uses a "field ops ledger" visual style — gunmetal background,
-brass/drab/flare accent colors, a stenciled display typeface for
-headers, and monospace figures for stat numbers so they line up like
-a real ledger. Pass/fail shows as a rotated ink-stamp badge. If you
-ever want the palette or fonts changed, just tell me what direction
-you'd prefer and I'll rework the tokens in `tailwind.config.js` and
-`app/globals.css` — the rest of the site pulls from those automatically.
+The site is themed around "Kingdom 2194" — a medieval war-kingdom
+look: stone and iron backgrounds, aged gold and blood-red accents,
+parchment-toned text, a carved-stone display typeface (Cinzel) paired
+with a manuscript body serif (EB Garamond), and monospace figures for
+stat numbers so they still line up like a scribe's tally. Pass/fail
+shows as a rotated wax-seal badge. If you ever want the palette or
+fonts changed again, just tell me the direction and I'll rework the
+tokens in `tailwind.config.js`, `app/layout.js`, and `app/globals.css`
+— the rest of the site pulls from those automatically.
 
 - The homepage search box now accepts a **Governor ID or a name**. If
   more than one governor matches a typed name, a picker shows up so

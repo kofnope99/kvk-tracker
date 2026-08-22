@@ -27,7 +27,7 @@ export default function MgePage() {
   return (
     <main className="space-y-8">
       <header className="border-b-2 border-brass pb-4 mb-2">
-        <p className="font-data text-xs tracking-[0.25em] text-brass uppercase">Field Ledger — Alliance Ops</p>
+        <p className="font-data text-xs tracking-[0.25em] text-brass uppercase">Kingdom 2194</p>
         <div className="flex items-end justify-between mt-1">
           <h1 className="font-display text-3xl uppercase tracking-wide text-paper">MGE Application</h1>
           <a href="/" className="font-data text-xs tracking-wider text-steel hover:text-brassBright uppercase">← Home</a>

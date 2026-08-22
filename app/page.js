@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { supabasePublic } from "../lib/supabaseClient";
 import { computeDelta, computePoints, findRequirementTier, computeRequiredPoints } from "../lib/points";
 import StatsCharts from "./StatsCharts";
-import { Crosshair, Skull, ScrollText, Shield, Radio } from "lucide-react";
+import { Swords, Skull, ScrollText, Shield, Crown } from "lucide-react";
 import BarCompareChart from "./BarCompareChart";
 
 // Shared helpers for KvK-vs-KvK comparisons -- fetch a single event's
@@ -400,8 +400,8 @@ export default function Home() {
     <main className="space-y-10">
       <header className="dispatch-scan border border-hairline bg-panel rounded-sm px-6 py-8 space-y-5">
         <div className="flex items-center gap-2">
-          <Radio size={14} className="text-brass" />
-          <p className="font-data text-xs tracking-[0.3em] text-brass uppercase">Field Ledger — Alliance Ops</p>
+          <Crown size={14} className="text-brass" />
+          <p className="font-data text-xs tracking-[0.3em] text-brass uppercase">Kingdom 2194</p>
         </div>
 
         <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-wide text-paper leading-none">
@@ -423,7 +423,7 @@ export default function Home() {
             <ScrollText size={13} /> Home
           </span>
           <a href="/mge" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
-            <Crosshair size={13} /> MGE Application
+            <Swords size={13} /> MGE Application
           </a>
           <a href="/admin" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
             <Shield size={13} /> Admin
@@ -433,7 +433,7 @@ export default function Home() {
 
       <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-3">
         <h2 className="font-display text-lg uppercase tracking-wide text-paper flex items-center gap-2">
-          <Crosshair size={16} className="text-brass" /> Alliance totals — {allianceTotals?.eventName || "current KvK"}
+          <Swords size={16} className="text-brass" /> Alliance totals — {allianceTotals?.eventName || "current KvK"}
         </h2>
         {allianceLoading ? (
           <p className="text-sm text-steelDim">Loading...</p>
@@ -493,7 +493,7 @@ export default function Home() {
               </ol>
             </div>
             <div>
-              <p className="font-data text-[10px] tracking-widest text-flareBright uppercase mb-2">Top 10 — Deaths</p>
+              <p className="font-data text-[10px] tracking-widest text-flareBright uppercase mb-2 flex items-center gap-1.5"><Skull size={12} /> Top 10 — Deaths</p>
               <ol className="text-sm space-y-1.5">
                 {leaderboard.topDeaths.map((g, i) => (
                   <li key={g.id} className="ledger-row text-steel">
