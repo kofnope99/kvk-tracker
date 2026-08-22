@@ -19,8 +19,9 @@ between them. Takes about 20-30 minutes the first time.
    (If you had already run an older version of this schema, run
    `supabase/migration_add_display_stats.sql`,
    `supabase/migration_add_mge_applications.sql`,
-   `supabase/migration_add_mge_fields.sql`, and
-   `supabase/migration_add_fort_tracker.sql` too — each just adds
+   `supabase/migration_add_mge_fields.sql`,
+   `supabase/migration_add_fort_tracker.sql`, and
+   `supabase/migration_vip_level_to_text.sql` too — each just adds
    new pieces without touching your existing data.)
 5. Click **Project Settings** (gear icon) → **API**. You'll need three
    values from this page in step 3 below:
@@ -186,13 +187,13 @@ still saves to the admin panel — it just won't post to Discord.
   start the next 8-week off-season from zero — this is a hard delete
   with no undo, so only use it when a new off-season actually begins.
 
-- The MGE application form now also asks for VIP level (1–18), MGE
-  type (Cavalry/Infantry/Archer/Engineering), which commander they
-  want, an optional equipment screenshot, and a free-text message.
-  **The screenshot is never stored anywhere** — it's relayed directly
-  to your Discord webhook in the same message as the application and
-  discarded immediately after. The applicant also sees a reminder to
-  "send more information to LeeLoo in-game."
+- The MGE application form now also asks for VIP level (1–19, plus
+  SVIP), MGE type (Cavalry/Infantry/Archer/Engineering), which
+  commander they want, an optional equipment screenshot, and a
+  free-text message. **The screenshot is never stored anywhere** —
+  it's relayed directly to your Discord webhook in the same message as
+  the application and discarded immediately after. The applicant also
+  sees a reminder to "send more information to LeeLoo in-game."
 
 ## Notes & limits (so nothing surprises you)
 

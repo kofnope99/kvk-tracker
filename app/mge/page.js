@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-const VIP_LEVELS = Array.from({ length: 18 }, (_, i) => i + 1);
+const VIP_LEVELS = [...Array.from({ length: 19 }, (_, i) => i + 1), "SVIP"];
 const MGE_TYPES = ["Cavalry", "Infantry", "Archer", "Engineering"];
 
 export default function MgePage() {
@@ -93,7 +93,7 @@ export default function MgePage() {
                   value={vipLevel}
                   onChange={(e) => setVipLevel(e.target.value)}
                 >
-                  {VIP_LEVELS.map((v) => <option key={v} value={v}>VIP {v}</option>)}
+                  {VIP_LEVELS.map((v) => <option key={v} value={v}>{v === "SVIP" ? "SVIP" : `VIP ${v}`}</option>)}
                 </select>
               </div>
               <div>

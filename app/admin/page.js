@@ -365,7 +365,7 @@ export default function AdminPage() {
                 <div className="min-w-0">
                   <p className="text-sm text-paper">{a.governor_name} <span className="font-data text-steelDim">({a.governor_id})</span></p>
                   <p className="font-data text-xs text-brassBright mt-0.5">
-                    {a.vip_level ? `VIP ${a.vip_level}` : "VIP —"} · {a.mge_type || "—"}{a.commander ? ` · Wants: ${a.commander}` : ""}
+                    {a.vip_level ? (a.vip_level === "SVIP" ? "SVIP" : `VIP ${a.vip_level}`) : "VIP —"} · {a.mge_type || "—"}{a.commander ? ` · Wants: ${a.commander}` : ""}
                   </p>
                   {a.message && <p className="text-xs text-steel mt-0.5 italic">"{a.message}"</p>}
                   <ul className="mt-1 space-y-0.5">

@@ -5,7 +5,7 @@ export async function POST(req) {
   const formData = await req.formData();
   const governor_id = String(formData.get("governor_id") || "").trim();
   const governor_name = String(formData.get("governor_name") || "").trim();
-  const vip_level = formData.get("vip_level") ? Number(formData.get("vip_level")) : null;
+  const vip_level = String(formData.get("vip_level") || "").trim() || null;
   const mge_type = String(formData.get("mge_type") || "").trim();
   const commander = String(formData.get("commander") || "").trim();
   const message = String(formData.get("message") || "").trim();
