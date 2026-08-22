@@ -4,11 +4,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        ink: "#1A1613",
-        panel: "#241F1A",
-        panel2: "#2E2721",
-        panel3: "#3A3128",
-        hairline: "#4A3F33",
+        ink: "#16191C",
+        panel: "#202327",
+        panel2: "#282C30",
+        panel3: "#33383D",
+        hairline: "#454B52",
         brass: "#B8862E",
         brassBright: "#D4A542",
         drab: "#6B7F45",
@@ -16,8 +16,8 @@ module.exports = {
         flare: "#8C2F2A",
         flareBright: "#A63F39",
         paper: "#E8DCC0",
-        steel: "#A79A87",
-        steelDim: "#6B6152",
+        steel: "#9A9488",
+        steelDim: "#635D53",
       },
       fontFamily: {
         display: ["var(--font-display)"],
