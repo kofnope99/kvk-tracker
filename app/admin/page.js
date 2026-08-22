@@ -33,6 +33,11 @@ export default function AdminPage() {
   const [mgeApplications, setMgeApplications] = useState([]);
   const [mgeLoading, setMgeLoading] = useState(false);
 
+  const [fortWeeks, setFortWeeks] = useState([]);
+  const [fortFile, setFortFile] = useState(null);
+  const [fortLabel, setFortLabel] = useState("");
+  const [fortMsg, setFortMsg] = useState("");
+
   async function refreshEventSnapshots(eventId) {
     if (!eventId) return;
     const { data } = await supabasePublic
@@ -85,11 +90,44 @@ export default function AdminPage() {
     refreshMgeApplications();
   }
 
+  async function refreshFortWeeks() {
+    const { data } = await supabasePublic.from("fort_weeks").select("*").order("uploaded_at", { ascending: true });
+    setFortWeeks(data || []);
+  }
+
+  async function uploadFort(e) {
+    e.preventDefault();
+    setFortMsg("Uploading...");
+    const fd = new FormData();
+    fd.append("file", fortFile);
+    fd.append("label", fortLabel || `Week ${fortWeeks.length + 1}`);
+    const res = await fetch("/api/admin/fort-upload", { method: "POST", body: fd });
+    const data = await res.json();
+    setFortMsg(data.ok ? `Saved ${data.rows_saved} rows.` : `Error: ${data.error}`);
+    if (data.ok) { setFortLabel(""); refreshFortWeeks(); }
+  }
+
+  async function deleteFortWeek(id) {
+    await fetch("/api/admin/delete-fort-week", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    refreshFortWeeks();
+  }
+
+  async function resetFortTracker() {
+    if (!confirm("Reset the fort tracker? This deletes every uploaded week and can't be undone. Only do this at the start of a new off-season.")) return;
+    await fetch("/api/admin/fort-reset", { method: "POST" });
+    refreshFortWeeks();
+  }
+
   useEffect(() => {
     if (loggedIn) {
       refreshEvents();
       refreshPendingLinks();
       refreshMgeApplications();
+      refreshFortWeeks();
     }
   }, [loggedIn]);
   useEffect(() => {
@@ -344,6 +382,41 @@ export default function AdminPage() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg uppercase tracking-wide text-paper">Fort tracker</h2>
+          <button onClick={resetFortTracker} className="text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1.5 rounded">
+            Reset off-season
+          </button>
+        </div>
+        <p className="text-sm text-steel">
+          Upload one week's fort sheet at a time. Columns expected: governor_id, name, started, completed, joined, Total (Total = completed + joined if not present). Reset clears every week — only do this when a new 8-week off-season begins.
+        </p>
+        <form onSubmit={uploadFort} className="space-y-3">
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFortFile(e.target.files[0])} required className="text-sm" />
+          <input className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder={`Label (e.g. Week ${fortWeeks.length + 1})`}
+            value={fortLabel} onChange={(e) => setFortLabel(e.target.value)} />
+          <button className="bg-brass hover:bg-brassBright text-ink px-4 py-2 rounded-sm font-display uppercase tracking-wide">Upload</button>
+        </form>
+        {fortMsg && <p className="text-sm text-steel">{fortMsg}</p>}
+
+        {fortWeeks.length > 0 && (
+          <div className="pt-2">
+            <p className="text-sm text-steel mb-2">Uploaded weeks this off-season ({fortWeeks.length} of 8):</p>
+            <ul className="space-y-2">
+              {fortWeeks.map((w) => (
+                <li key={w.id} className="flex items-center justify-between bg-panel2 rounded-sm border border-hairline px-3 py-2">
+                  <span className="text-sm">{w.label}</span>
+                  <button onClick={() => deleteFortWeek(w.id)} className="text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </section>
     </main>

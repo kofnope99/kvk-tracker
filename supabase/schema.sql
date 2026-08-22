@@ -86,3 +86,30 @@ create table mge_applications (
 alter table mge_applications enable row level security;
 -- (no policies added on purpose -- public gets no direct access at all;
 -- only server-side code using the service role key can read/write it)
+
+-- Fort tracker -- a separate, resettable weekly tracking system (not
+-- tied to KvK events). Each upload is one week's forts-destroyed
+-- totals; the whole thing gets wiped via the Reset button each new
+-- off-season.
+create table fort_weeks (
+  id bigint generated always as identity primary key,
+  label text not null,
+  uploaded_at timestamptz default now()
+);
+
+create table fort_stats (
+  id bigint generated always as identity primary key,
+  week_id bigint references fort_weeks(id) on delete cascade,
+  governor_id text not null,
+  governor_name text,
+  started bigint default 0,
+  completed bigint default 0,
+  joined bigint default 0,
+  total bigint default 0
+);
+create index on fort_stats (week_id, governor_id);
+
+alter table fort_weeks enable row level security;
+alter table fort_stats enable row level security;
+create policy "public read fort_weeks" on fort_weeks for select using (true);
+create policy "public read fort_stats" on fort_stats for select using (true);

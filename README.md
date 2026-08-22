@@ -170,6 +170,24 @@ still saves to the admin panel — it just won't post to Discord.
   recent 3 KvKs — both in the Discord notification and in the admin
   panel — so admins can see a track record, not just current-KvK stats.
 
+- **Fort Tracker** — a separate section on the homepage, independent
+  of the KvK picker. Upload one week's fort sheet at a time from the
+  admin panel (columns: `governor_id`, `name`, `started`, `completed`,
+  `joined`, `Total` — if Total isn't present it's computed as
+  completed + joined, same as your sheet). The homepage shows the
+  kingdom's total forts destroyed this off-season, that week's top 15
+  ranking (updates with every upload), and a top 10 ranking of the
+  full off-season total. The admin panel's **"Reset off-season"**
+  button wipes every uploaded week so you can start the next 8-week
+  off-season from zero — this is a hard delete with no undo, so only
+  use it when a new off-season actually begins.
+
+- The Fort Tracker section also has its own search box — players can
+  look up their own Governor ID or name and see their forts destroyed
+  per week (across every week uploaded this off-season) plus their
+  off-season total, with the same live-suggestion dropdown as the
+  main governor search.
+
 ## Notes & limits (so nothing surprises you)
 
 - The free Supabase tier comfortably handles thousands of governors and
