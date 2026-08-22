@@ -364,6 +364,10 @@ export default function AdminPage() {
               <li key={a.id} className="bg-panel2 rounded-sm border border-hairline px-3 py-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-paper">{a.governor_name} <span className="font-data text-steelDim">({a.governor_id})</span></p>
+                  <p className="font-data text-xs text-brassBright mt-0.5">
+                    {a.vip_level ? `VIP ${a.vip_level}` : "VIP —"} · {a.mge_type || "—"}{a.commander ? ` · Wants: ${a.commander}` : ""}
+                  </p>
+                  {a.message && <p className="text-xs text-steel mt-0.5 italic">"{a.message}"</p>}
                   <ul className="mt-1 space-y-0.5">
                     {(a.killHistory || []).map((h) => (
                       <li key={h.eventName} className="font-data text-xs text-steel">
@@ -373,7 +377,7 @@ export default function AdminPage() {
                     ))}
                   </ul>
                   <p className="font-data text-[10px] text-steelDim mt-1">
-                    Applied {new Date(a.submitted_at).toLocaleDateString()}
+                    Applied {new Date(a.submitted_at).toLocaleDateString()} — screenshot (if any) was sent to Discord only, not stored here
                   </p>
                 </div>
                 <button onClick={() => deleteMgeApplication(a.id)} className="shrink-0 text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
