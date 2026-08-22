@@ -31,7 +31,6 @@ export default function AdminPage() {
   const [pendingLinks, setPendingLinks] = useState([]);
   const [eventSnapshots, setEventSnapshots] = useState([]);
   const [mgeApplications, setMgeApplications] = useState([]);
-  const [mgeStats, setMgeStats] = useState({});
   const [mgeLoading, setMgeLoading] = useState(false);
 
   async function refreshEventSnapshots(eventId) {
@@ -76,22 +75,6 @@ export default function AdminPage() {
     setMgeApplications(data.ok ? data.applications : []);
     setMgeLoading(false);
   }
-
-  // Looks up each applicant's current stats once both the application
-  // list and the selected event's snapshots are loaded (they load on
-  // separate async paths, so this reruns whichever finishes last).
-  useEffect(() => {
-    if (mgeApplications.length === 0 || eventSnapshots.length === 0) { setMgeStats({}); return; }
-    (async () => {
-      const latest = eventSnapshots[eventSnapshots.length - 1];
-      const ids = mgeApplications.map((a) => a.governor_id);
-      const { data: rows } = await supabasePublic
-        .from("governor_stats").select("*").eq("snapshot_id", latest.id).in("governor_id", ids);
-      const map = {};
-      for (const r of rows || []) map[r.governor_id] = r;
-      setMgeStats(map);
-    })();
-  }, [mgeApplications, eventSnapshots]);
 
   async function deleteMgeApplication(id) {
     await fetch("/api/admin/delete-mge-application", {
@@ -331,7 +314,7 @@ export default function AdminPage() {
           <span className="font-data text-[10px] text-steelDim uppercase">Auto-deleted after 14 days</span>
         </div>
         <p className="text-xs text-steelDim">
-          Share this link with players: <span className="font-data">yoursite.vercel.app/mge</span>. Stats shown are from the latest snapshot of whichever KvK is selected above.
+          Share this link with players: <span className="font-data">yoursite.vercel.app/mge</span>. T4/T5 kills shown are from each applicant's most recent 3 KvKs.
         </p>
         {mgeLoading ? (
           <p className="text-sm text-steelDim">Loading...</p>
@@ -339,27 +322,27 @@ export default function AdminPage() {
           <p className="text-sm text-steel">No applications right now.</p>
         ) : (
           <ul className="space-y-2">
-            {mgeApplications.map((a) => {
-              const stats = mgeStats[a.governor_id];
-              return (
-                <li key={a.id} className="bg-panel2 rounded-sm border border-hairline px-3 py-2 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm text-paper">{a.governor_name} <span className="font-data text-steelDim">({a.governor_id})</span></p>
-                    <p className="font-data text-xs text-steel mt-0.5">
-                      {stats
-                        ? `Power ${Number(stats.power).toLocaleString()} · T4 ${Number(stats.t4_kills).toLocaleString()} · T5 ${Number(stats.t5_kills).toLocaleString()} · Deaths ${Number(stats.deaths).toLocaleString()}`
-                        : "No stats found for this KvK"}
-                    </p>
-                    <p className="font-data text-[10px] text-steelDim mt-0.5">
-                      Applied {new Date(a.submitted_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <button onClick={() => deleteMgeApplication(a.id)} className="shrink-0 text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
-                    Delete
-                  </button>
-                </li>
-              );
-            })}
+            {mgeApplications.map((a) => (
+              <li key={a.id} className="bg-panel2 rounded-sm border border-hairline px-3 py-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-paper">{a.governor_name} <span className="font-data text-steelDim">({a.governor_id})</span></p>
+                  <ul className="mt-1 space-y-0.5">
+                    {(a.killHistory || []).map((h) => (
+                      <li key={h.eventName} className="font-data text-xs text-steel">
+                        {h.eventName}: T4 {h.t4_kills.toLocaleString()} · T5 {h.t5_kills.toLocaleString()}
+                        {!h.found && <span className="text-steelDim"> (not found)</span>}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="font-data text-[10px] text-steelDim mt-1">
+                    Applied {new Date(a.submitted_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <button onClick={() => deleteMgeApplication(a.id)} className="shrink-0 text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
+                  Delete
+                </button>
+              </li>
+            ))}
           </ul>
         )}
       </section>

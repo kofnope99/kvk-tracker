@@ -162,6 +162,14 @@ still saves to the admin panel — it just won't post to Discord.
   to the MGE application page and the admin panel — no more needing
   to type `/mge` in directly.
 
+- The "Compare KvKs" and "Compare against another KvK" charts are now
+  compass-style radar charts instead of bar charts.
+- The search box shows live suggestions as you type a name or partial
+  Governor ID, no need to press Search first to see matches.
+- MGE applications now show T4/T5 kills across each applicant's most
+  recent 3 KvKs — both in the Discord notification and in the admin
+  panel — so admins can see a track record, not just current-KvK stats.
+
 ## Notes & limits (so nothing surprises you)
 
 - The free Supabase tier comfortably handles thousands of governors and

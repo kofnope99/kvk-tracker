@@ -1,25 +1,27 @@
 "use client";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 // data: [{ name: 'T4 Kills', A: 123, B: 456 }, ...]
+// Rendered as a compass-style radar chart: two overlapping colored
+// shapes (gold vs crimson) fanning out across the stat categories.
 export default function BarCompareChart({ data, labelA, labelB }) {
   if (!data || data.length === 0) {
     return <p className="text-sm text-steelDim font-data">No data to compare yet.</p>;
   }
   return (
-    <div className="h-64 bg-panel2 rounded-sm border border-hairline p-3">
+    <div className="h-72 bg-panel2 rounded-sm border border-hairline p-3">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#333F4C" />
-          <XAxis dataKey="name" stroke="#93A0AD" fontSize={11} fontFamily="var(--font-data)" />
-          <YAxis stroke="#93A0AD" fontSize={11} fontFamily="var(--font-data)" />
-          <Tooltip contentStyle={{ background: "#10141A", border: "1px solid #333F4C", fontFamily: "var(--font-data)" }} />
+        <RadarChart data={data} outerRadius="68%">
+          <PolarGrid stroke="#4A3F33" />
+          <PolarAngleAxis dataKey="name" stroke="#A79A87" fontSize={11} fontFamily="var(--font-data)" />
+          <PolarRadiusAxis stroke="#4A3F33" fontSize={9} tick={{ fill: "#6B6152" }} />
+          <Tooltip contentStyle={{ background: "#1A1613", border: "1px solid #4A3F33", fontFamily: "var(--font-data)" }} />
           <Legend wrapperStyle={{ fontSize: 12, fontFamily: "var(--font-data)" }} />
-          <Bar dataKey="A" name={labelA} fill="#C79A46" radius={[2, 2, 0, 0]} />
-          <Bar dataKey="B" name={labelB} fill="#7C9B5E" radius={[2, 2, 0, 0]} />
-        </BarChart>
+          <Radar name={labelA} dataKey="A" stroke="#B8862E" fill="#B8862E" fillOpacity={0.35} strokeWidth={2} />
+          <Radar name={labelB} dataKey="B" stroke="#8C2F2A" fill="#8C2F2A" fillOpacity={0.35} strokeWidth={2} />
+        </RadarChart>
       </ResponsiveContainer>
     </div>
   );

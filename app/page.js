@@ -64,6 +64,8 @@ export default function Home() {
   const [govId, setGovId] = useState("");
   const [resolvedGovId, setResolvedGovId] = useState("");
   const [nameMatches, setNameMatches] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -214,10 +216,32 @@ export default function Home() {
     })();
   }, [selectedEventId, selectedSnapshotId, snapshots]);
 
+  // Live suggestions as the person types a name or ID -- debounced so
+  // it doesn't fire a query on every keystroke.
+  useEffect(() => {
+    const query = govId.trim();
+    if (query.length < 2 || !selectedSnapshotId) { setSuggestions([]); return; }
+    const handle = setTimeout(async () => {
+      const latest = snapshots.find((s) => String(s.id) === selectedSnapshotId);
+      if (!latest) { setSuggestions([]); return; }
+      const [byId, byName] = await Promise.all([
+        supabasePublic.from("governor_stats").select("governor_id,governor_name")
+          .eq("snapshot_id", latest.id).ilike("governor_id", `${query}%`).limit(6),
+        supabasePublic.from("governor_stats").select("governor_id,governor_name")
+          .eq("snapshot_id", latest.id).ilike("governor_name", `%${query}%`).limit(6),
+      ]);
+      const merged = [...(byId.data || []), ...(byName.data || [])];
+      const unique = Array.from(new Map(merged.map((r) => [r.governor_id, r])).values()).slice(0, 8);
+      setSuggestions(unique);
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [govId, selectedSnapshotId, snapshots]);
+
   async function search() {
     setError("");
     setResult(null);
     setNameMatches(null);
+    setSuggestionsOpen(false);
     setGovCompareEventId("");
     setGovCompareData(null);
     const query = govId.trim();
@@ -263,8 +287,11 @@ export default function Home() {
     }
   }
 
-  function pickNameMatch(id) {
+  function pickNameMatch(id, displayValue) {
     setNameMatches(null);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+    if (displayValue) setGovId(displayValue);
     setLoading(true);
     runSearchForId(id).finally(() => setLoading(false));
   }
@@ -531,14 +558,34 @@ export default function Home() {
       <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">
         <h2 className="font-display text-lg uppercase tracking-wide text-paper">Check your stats</h2>
 
-        <div className="flex gap-2">
-          <input
-            className="flex-1 rounded-sm bg-panel2 border border-hairline px-3 py-2 outline-none font-data focus:border-brass"
-            placeholder="Governor ID or name"
-            value={govId}
-            onChange={(e) => setGovId(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && search()}
-          />
+        <div className="flex gap-2 relative">
+          <div className="flex-1 relative">
+            <input
+              className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2 outline-none font-data focus:border-brass"
+              placeholder="Governor ID or name"
+              value={govId}
+              onChange={(e) => { setGovId(e.target.value); setSuggestionsOpen(true); }}
+              onFocus={() => setSuggestionsOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+              onKeyDown={(e) => e.key === "Enter" && search()}
+            />
+            {suggestionsOpen && suggestions.length > 0 && (
+              <ul className="absolute z-10 top-full left-0 right-0 mt-1 bg-panel2 border border-hairline rounded-sm max-h-56 overflow-y-auto">
+                {suggestions.map((s) => (
+                  <li key={s.governor_id}>
+                    <button
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickNameMatch(s.governor_id, s.governor_name)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-panel3 flex justify-between gap-2"
+                    >
+                      <span className="truncate">{s.governor_name}</span>
+                      <span className="font-data text-steelDim shrink-0">{s.governor_id}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <button onClick={search} disabled={loading} className="bg-brass hover:bg-brassBright text-ink px-4 py-2 rounded-sm font-display uppercase tracking-wide">
             {loading ? "Searching..." : "Search"}
           </button>
@@ -552,7 +599,7 @@ export default function Home() {
               {nameMatches.map((m) => (
                 <li key={m.governor_id}>
                   <button
-                    onClick={() => pickNameMatch(m.governor_id)}
+                    onClick={() => pickNameMatch(m.governor_id, m.governor_name)}
                     className="w-full text-left bg-panel2 hover:bg-panel3 border border-hairline rounded-sm px-3 py-2 text-sm"
                   >
                     {m.governor_name} <span className="font-data text-steelDim">({m.governor_id})</span>
