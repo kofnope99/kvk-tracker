@@ -79,12 +79,16 @@ export async function POST() {
     return Response.json({ ok: true, count: 0 });
   }
 
-  console.log("DEBUG send-reminder: ANNOUNCEMENT_WEBHOOK_URL set?", Boolean(process.env.ANNOUNCEMENT_WEBHOOK_URL));
-  console.log("DEBUG send-reminder: same as DISCORD_WEBHOOK_URL?", process.env.ANNOUNCEMENT_WEBHOOK_URL === process.env.DISCORD_WEBHOOK_URL);
-  console.log("DEBUG send-reminder: ANNOUNCEMENT_WEBHOOK_URL length:", (process.env.ANNOUNCEMENT_WEBHOOK_URL || "").length);
-
   if (!process.env.ANNOUNCEMENT_WEBHOOK_URL) {
     return Response.json({ ok: false, error: "ANNOUNCEMENT_WEBHOOK_URL isn't configured" }, { status: 500 });
+  }
+
+  function formatCompact(n) {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, "") + "B";
+    if (abs >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (abs >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
+    return String(Math.round(n));
   }
 
   const header =
@@ -93,7 +97,7 @@ export async function POST() {
     `The following governors (55M+ power) have not yet met the current KvK's minimum requirement. Please meet it before the end of Kingsland.`;
 
   const lines = flagged.map(
-    (g) => `${g.name} (${g.id}) — ${Math.round(g.points).toLocaleString()} / ${Math.round(g.required).toLocaleString()} points`
+    (g) => `${g.name} (${g.id}) — ${formatCompact(g.points)} / ${formatCompact(g.required)} points`
   );
 
   const chunks = chunkMessage(header, lines);
