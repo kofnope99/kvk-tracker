@@ -39,9 +39,7 @@ export async function POST(req) {
       week_id: week.id,
       governor_id: String(pick(row, ["governor_id", "Governor ID", "ID"]) ?? "").trim(),
       governor_name: String(pick(row, ["name", "Name", "Governor Name"]) ?? "").trim(),
-      started,
-      completed,
-      joined,
+      started, completed, joined,
       total: totalRaw !== undefined ? Number(totalRaw) : completed + joined,
     };
   }).filter((r) => r.governor_id);

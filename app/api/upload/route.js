@@ -2,8 +2,6 @@ import * as XLSX from "xlsx";
 import { supabaseAdmin } from "../../../lib/supabaseClient";
 import { isAdmin } from "../../../lib/checkAdmin";
 
-// Matches your spreadsheet's column headers to the fields we store,
-// even if capitalization/wording is slightly different.
 function pick(row, candidates) {
   const keys = Object.keys(row);
   for (const c of candidates) {

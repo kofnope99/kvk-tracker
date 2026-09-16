@@ -3,8 +3,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
-// data: [{ label, points, t4_kills, t5_kills, deaths }, ...] one entry
-// per snapshot uploaded so far in this KvK, in chronological order.
 export default function StatsCharts({ data }) {
   if (!data || data.length < 2) {
     return (

@@ -1,212 +1,129 @@
-# KvK Governor Tracker — Setup Guide (no coding required)
+# KvK Governor Tracker — Setup Guide
 
-This is a complete website: governors search their stats, you upload Excel
-sheets, points and pass/fail get calculated automatically, and farm
-accounts can be linked to a main account. Total cost: **$0/month**.
-
-You'll use two free websites: **Supabase** (the database) and
-**Vercel** (hosts the actual site), plus **GitHub** to move the code
-between them. Takes about 20-30 minutes the first time.
+Complete website: governors search their stats, you upload Excel
+sheets, points and pass/fail calculate automatically, farm accounts
+link to mains, plus a Fort Tracker, MGE applications, Pass 7 Teleport
+submissions, and a kingdom-wide contribution rankings page. Runs on
+Supabase (database) and Vercel (hosting), both free at your scale.
 
 ## 1. Create your database (Supabase)
 
-1. Go to supabase.com → Sign up (free) → "New project".
-2. Pick any name/password (save the password somewhere) and region.
-3. Once it's created, click the **SQL Editor** icon on the left → "New query".
-4. Open the file `supabase/schema.sql` from this project, copy ALL of it,
-   paste it into the SQL editor, and click **Run**. This creates all the
-   tables the site needs.
-   (If you had already run an older version of this schema, run
-   `supabase/migration_add_display_stats.sql`,
-   `supabase/migration_add_mge_applications.sql`,
-   `supabase/migration_add_mge_fields.sql`,
-   `supabase/migration_add_fort_tracker.sql`, and
-   `supabase/migration_vip_level_to_text.sql` too — each just adds
-   new pieces without touching your existing data.)
-5. Click **Project Settings** (gear icon) → **API**. You'll need three
-   values from this page in step 3 below:
-   - `Project URL`
-   - `anon public` key
-   - `service_role` key (click "reveal" — keep this secret, never share it)
+1. Go to supabase.com → Sign up → "New project".
+2. Once created, open the **SQL Editor** → "New query".
+3. Open `supabase/schema.sql` from this project, copy ALL of it, paste
+   it in, and click **Run**. This creates every table the site needs.
+4. Go to **Project Settings** (gear icon) → **API**. You'll need the
+   **Project URL**, **anon public** key, and **service_role** key
+   (click reveal) for the next step. (On newer projects these may be
+   labeled "publishable" and "secret" instead — use those the same way.)
 
 ## 2. Put the code on GitHub
 
-1. Go to github.com → sign up if needed → "New repository" → name it
-   `kvk-tracker` → Create.
-2. On the new repo page, click "uploading an existing file" and drag in
-   ALL the files/folders from this project (keep the folder structure).
-3. Commit the files.
-
-(If you're comfortable with it, `git push` works too — but drag-and-drop
-in the browser is fine and needs zero setup.)
+1. Create a new repository (e.g. `kvk-tracker`) on github.com.
+2. Click "uploading an existing file", drag in every file and folder
+   from this project (keep the folder structure), and commit.
 
 ## 3. Deploy the site (Vercel)
 
-1. Go to vercel.com → sign up with your GitHub account.
-2. "Add New" → "Project" → pick your `kvk-tracker` repo → Import.
-3. Before clicking Deploy, open **Environment Variables** and add these
-   four (values from Supabase step 1.5, plus your own admin password):
+1. Go to vercel.com → sign in with GitHub → Add New → Project → import
+   your repo.
+2. Before deploying, add these environment variables:
 
    | Name | Value |
    |---|---|
    | `NEXT_PUBLIC_SUPABASE_URL` | your Project URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon public key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | your service_role key |
-   | `ADMIN_PASSWORD` | any password you choose, for the admin panel |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon/publishable key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | your service_role/secret key |
+   | `ADMIN_PASSWORD` | any password you choose |
+   | `DISCORD_WEBHOOK_URL` | your admin channel's webhook (see below) |
+   | `TELEPORT_WEBHOOK_URL` | webhook for the Pass 7 Teleport channel |
 
-4. Click **Deploy**. In about a minute you'll get a live URL like
-   `kvk-tracker.vercel.app` — that's your website. Share it with your
-   alliance.
+3. Click **Deploy**. You'll get a live URL like `kvk-tracker.vercel.app`.
 
 ## 4. Using it
 
-- Go to `yoursite.vercel.app/admin`, log in with the `ADMIN_PASSWORD`
-  you set.
-- Create a KvK Event (e.g. "KvK Season 5").
-- Set your point values (defaults are pre-filled to match your existing
-  sheet: Deaths=60, T4 kill=10, T5 kill=12 — change them if your rules
-  ever change).
-- Add your power-based minimum tiers. Enter them exactly like your
-  "Minimum" sheet — min power, max power, minimum deaths, minimum
-  kills, one row per bracket (you have 17 of these, 30mil through
-  110mil+). The site converts each tier's min deaths/kills into a
-  points target automatically the same way your spreadsheet's
-  "Min. Contribution" column does (min kills × T5 weight + min deaths
-  × Death weight).
-- Resource (rss) assistance isn't tracked in this version, per your
-  call — it can be added later if you want it counted.
-- Upload your first Excel export and **check "baseline"** — this is
-  Day 1, everything else is measured against it.
-- Every time you re-scan the alliance during the KvK, upload the new
-  Excel sheet again (leave "baseline" unchecked) with a label like
-  "Day 3". The site always compares the newest upload to the baseline.
-- Your Excel file needs columns named (close variants are auto-detected):
-  `Governor ID`, `Name`/`Governor Name`, `Power`, `T4 Kills`, `T5 Kills`,
-  `Deaths`/`Deads`. Optional columns `Acclaims`, `Healed troops`, and
-  `Trades` are also picked up and shown on a governor's page as
-  informational stats — they don't count toward points/pass-fail.
-- Governors go to the homepage, pick a KvK and a point in time (defaults
-  to the current KvK's latest upload), type their Governor ID, and see
-  their points and pass/fail status instantly, plus line graphs of
-  their points and kills/deaths across every snapshot uploaded so far
-  in that KvK. Nothing is ever deleted — every past KvK and every
-  snapshot within it stays browsable forever, so governors can look
-  back at "how did I do last KvK" or "where was I on Day 3" any time.
-- Governors can submit a "link my farm" request from the homepage; you
-  approve/reject it from the admin panel, and it auto-combines their
-  stats afterward.
+- `/admin` — log in with `ADMIN_PASSWORD`. Create a KvK event, set
+  point values (pre-filled to 60 death / 10 T4 / 12 T5), add power-tier
+  requirements (min deaths + min kills per bracket), then upload your
+  baseline Excel and re-upload as the KvK progresses.
+- Excel columns picked up: `Governor ID`, `Name`/`Governor Name`,
+  `Power`, `T4 Kills`, `T5 Kills`, `Deaths`/`Deads`, and optionally
+  `Acclaims`, `Healed troops`, `Trades` (shown as info only).
+- The homepage search box takes a Governor ID or a name, with live
+  suggestions as you type. Multiple name matches show a picker.
+- Governors can request a farm-account link from the homepage; once
+  approved in `/admin`, the farm's kills/deaths count at **20% weight**
+  toward the main account (power always comes from the main account
+  only, never combined).
+- If a KvK has only one snapshot uploaded, its numbers are shown as
+  totals (compared against zero) rather than a delta against itself —
+  useful for backfilling a KvK you only have final numbers for.
+- **Contribution Rankings** (`/rankings`) — top 300 governors kingdom-
+  wide, ranked by contribution points for whichever KvK/snapshot is
+  selected, with a Pass/Below status per governor.
+- **Fort Tracker** (`/fort`) — a separate, resettable weekly system.
+  Upload one week's sheet at a time from `/admin` (columns:
+  `governor_id`, `name`, `started`, `completed`, `joined`, `Total` —
+  Total defaults to completed + joined if not present). Shows kingdom
+  total forts destroyed, that week's top 15, an off-season top 10, and
+  its own governor search. The admin panel's **Reset off-season**
+  button wipes every week — only use it when a new 8-week off-season
+  starts.
+- **MGE Application** (`/mge`) — players submit Governor ID, name, VIP
+  level (1–19 or SVIP), MGE type, desired commander, an optional
+  equipment screenshot, and a message. The screenshot is relayed
+  directly to Discord and **never stored**. Applications (without the
+  image) are saved temporarily and auto-delete after 14 days; the
+  admin panel also shows each applicant's T4/T5 kills across their
+  last 3 KvKs.
+- **Pass 7 Teleport** (`/teleport`) — players submit their governor
+  name and a mandatory crystal-spend screenshot, plus an optional role
+  (Swarmer/Field/Counter Rally/Garrison/Rally). Picking Garrison or
+  Rally shows a reminder to send tech/equipment screenshots to Todo or
+  DeathKing in-game. **Nothing on this page is ever stored** — it's
+  relayed straight to its own Discord channel (`TELEPORT_WEBHOOK_URL`)
+  and discarded.
+- **Kingsland Reminder** button (in `/admin`) — sends a single
+  `@everyone` Discord message listing every governor above 55M power
+  who hasn't met the current KvK's minimum requirement yet, reminding
+  them to do so before the end of Kingsland. Nothing is stored; it
+  only sends the message. Long lists are split across multiple
+  Discord messages automatically (Discord's 2000-character limit).
 
-- Two more comparison views: a **"Compare KvKs — alliance totals"**
-  section (pick any two KvKs, see T4/T5 kills and deaths as grouped
-  bars), and, after searching a Governor ID, a **"Compare against
-  another KvK"** picker that bar-charts that governor's T4/T5 kills,
-  deaths, and points between their current KvK and any other one —
-  farm-account weighting applies here too.
-- The **Alliance totals** and **Top governors** sections both follow
-  whichever KvK and snapshot you pick in the selector above them —
-  pick a different KvK to see its totals and leaderboard instead.
-  There's no need to mark anything "active" just to view historical
-  data; "active" only controls which KvK loads by default when someone
-  first opens the site.
+## Setting up the Discord webhooks
 
-- The homepage also shows a **Top governors** leaderboard — top 15 by
-  kills, top 10 by deaths — for whichever KvK and snapshot is picked
-  in the selector. Farm accounts don't appear as their own leaderboard
-  entries; their (weighted) stats are folded into their main account.
-- When a farm account is linked and approved, only **20% of its kills
-  and deaths** count toward the main account's total. **Power always
-  comes from the main account only** — a farm's power is never added
-  on top, so the power-tier lookup reflects the main account's actual
-  power, not an inflated combined total. This applies everywhere a
-  governor's combined stats show up — search results, the charts, and
-  the leaderboard.
-- Uploaded a snapshot by mistake? In the admin panel's Upload section,
-  every snapshot for the currently selected KvK is listed with a
-  Delete button — deleting one removes that upload and all its
-  governor stats, and doesn't affect any other snapshot.
+You need two, if you want both features:
+
+1. In Discord, open the target channel → gear icon → **Integrations**
+   → **Webhooks** → **New Webhook** → name it → **Copy Webhook URL**.
+2. Do this once for your admin channel (`DISCORD_WEBHOOK_URL`, used by
+   MGE applications and the Kingsland Reminder) and once for wherever
+   Pass 7 Teleport submissions should land (`TELEPORT_WEBHOOK_URL`) —
+   these can be the same channel or different ones.
+3. Add both URLs as environment variables in Vercel.
+
+If a webhook variable isn't set, that specific feature's Discord
+message just won't send — nothing else breaks.
 
 ## Look & feel
 
-The site is themed around "Kingdom 2194" — a medieval war-kingdom
-look: stone and iron backgrounds, aged gold and blood-red accents,
-parchment-toned text, a carved-stone display typeface (Cinzel) paired
-with a manuscript body serif (EB Garamond), and monospace figures for
-stat numbers so they still line up like a scribe's tally. Pass/fail
-shows as a rotated wax-seal badge. If you ever want the palette or
-fonts changed again, just tell me the direction and I'll rework the
-tokens in `tailwind.config.js`, `app/layout.js`, and `app/globals.css`
-— the rest of the site pulls from those automatically.
-
-- The homepage search box now accepts a **Governor ID or a name**. If
-  more than one governor matches a typed name, a picker shows up so
-  the right one can be chosen.
-- There's a public **MGE application page** at `yoursite.vercel.app/mge`
-  — players enter their Governor ID and name, which (1) posts to your
-  Discord admin channel along with their current Power/T4/T5/Deaths for
-  the active KvK, and (2) shows up in the admin panel under "MGE
-  applications," where their stats are shown and each entry can be
-  deleted manually. Applications older than 14 days are deleted
-  automatically the next time the admin panel loads that section —
-  this data is intentionally temporary, not archived.
-
-## Setting up the Discord webhook (for MGE applications)
-
-1. In Discord, go to your admin channel → click the gear icon (Edit
-   Channel) → **Integrations** → **Webhooks** → **New Webhook**.
-2. Name it (e.g. "MGE Applications"), make sure it's pointed at the
-   right channel, then click **Copy Webhook URL**.
-3. In Vercel, go to your project → Settings → Environment Variables →
-   add `DISCORD_WEBHOOK_URL` with that pasted URL, then redeploy (or
-   just wait for your next commit to trigger one).
-
-If this variable isn't set, the application page still works and
-still saves to the admin panel — it just won't post to Discord.
-
-- The homepage now opens with a hero banner (with a "Last dispatch"
-  timestamp showing when stats were last uploaded) and quick nav tabs
-  to the MGE application page and the admin panel — no more needing
-  to type `/mge` in directly.
-
-- The "Compare KvKs" and "Compare against another KvK" charts are now
-  compass-style radar charts instead of bar charts.
-- The search box shows live suggestions as you type a name or partial
-  Governor ID, no need to press Search first to see matches.
-- MGE applications now show T4/T5 kills across each applicant's most
-  recent 3 KvKs — both in the Discord notification and in the admin
-  panel — so admins can see a track record, not just current-KvK stats.
-
-- **Fort Tracker** now lives on its own page at
-  `yoursite.vercel.app/fort` (linked from the homepage nav), separate
-  from KvK tracking. Upload one week's fort sheet at a time from the
-  admin panel (columns: `governor_id`, `name`, `started`, `completed`,
-  `joined`, `Total` — if Total isn't present it's computed as
-  completed + joined, same as your sheet). The fort page shows the
-  kingdom's total forts destroyed this off-season, that week's top 15
-  ranking (updates with every upload), a top 10 off-season total
-  ranking, and its own search box for players to look up their own
-  per-week and off-season totals. The admin panel's
-  **"Reset off-season"** button wipes every uploaded week so you can
-  start the next 8-week off-season from zero — this is a hard delete
-  with no undo, so only use it when a new off-season actually begins.
-
-- The MGE application form now also asks for VIP level (1–19, plus
-  SVIP), MGE type (Cavalry/Infantry/Archer/Engineering), which
-  commander they want, an optional equipment screenshot, and a
-  free-text message. **The screenshot is never stored anywhere** —
-  it's relayed directly to your Discord webhook in the same message as
-  the application and discarded immediately after. The applicant also
-  sees a reminder to "send more information to LeeLoo in-game."
+Themed as "Kingdom 2194" — stone/iron backgrounds, aged gold and
+blood-red accents, parchment-toned text, Cinzel for headers, EB
+Garamond for body text, monospace for stat figures. Pass/fail shows
+as a rotated wax-seal badge. Tell me if you want the palette, fonts,
+or layout changed again.
 
 ## Notes & limits (so nothing surprises you)
 
-- The free Supabase tier comfortably handles thousands of governors and
-  years of KvK history — you won't hit limits with 300+ people.
-- The admin password is simple by design (good enough for an alliance
-  tool) — don't reuse a password you use elsewhere, and don't share the
-  `service_role` key with anyone.
-- Only one KvK event should be marked "active" at a time — that's the
-  one governors see stats for. (Editing `is_active` can be done from
-  Supabase's Table Editor if you ever run two events.)
-- Want changes later (new stat columns, different point formulas,
-  design tweaks)? Just paste the code back to me and describe what you
-  want changed.
+- The free Supabase tier comfortably handles thousands of governors
+  and years of KvK history.
+- The admin password is simple by design — don't reuse one you use
+  elsewhere, and never share the `service_role` key.
+- Only one KvK event should be marked "active" at a time (via "Set as
+  active" in the admin panel) — that's the one governors see by
+  default. You can still view and manage any other KvK regardless.
+- MGE application data (governor ID/name/VIP/type/commander/message)
+  is kept for 14 days then auto-deleted on the next admin panel load.
+  Screenshots for MGE and Pass 7 Teleport are never stored at all.
+- Want more changes later? Just describe what you want and I'll
+  update the code.

@@ -6,11 +6,7 @@ export async function POST(req) {
   const { kvk_event_id, min_power, max_power, min_deaths, min_kills } = await req.json();
   const admin = supabaseAdmin();
   const { error } = await admin.from("power_requirements").insert({
-    kvk_event_id,
-    min_power,
-    max_power: max_power || null,
-    min_deaths,
-    min_kills,
+    kvk_event_id, min_power, max_power: max_power || null, min_deaths, min_kills,
   });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json({ ok: true });

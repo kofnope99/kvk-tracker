@@ -10,9 +10,7 @@ export async function POST(req) {
     { kvk_event_id, stat_name: "t5_kills", points_per_unit: t5_kills },
     { kvk_event_id, stat_name: "deaths", points_per_unit: deaths },
   ];
-  const { error } = await admin
-    .from("point_rules")
-    .upsert(rows, { onConflict: "kvk_event_id,stat_name" });
+  const { error } = await admin.from("point_rules").upsert(rows, { onConflict: "kvk_event_id,stat_name" });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json({ ok: true });
 }

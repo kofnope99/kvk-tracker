@@ -1,8 +1,6 @@
 import { supabaseAdmin } from "../../../../lib/supabaseClient";
 import { isAdmin } from "../../../../lib/checkAdmin";
 
-// Makes exactly one KvK event "active" (the one governors see by
-// default on the homepage) -- turns off is_active on every other event.
 export async function POST(req) {
   if (!isAdmin()) return Response.json({ ok: false }, { status: 401 });
   const { id } = await req.json();

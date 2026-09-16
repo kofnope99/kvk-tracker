@@ -14,8 +14,6 @@ export default function FortPage() {
   const [fortResult, setFortResult] = useState(null);
   const [fortError, setFortError] = useState("");
 
-  // Fort tracker: kingdom-wide total, latest week's ranking, and the
-  // off-season cumulative top 10.
   useEffect(() => {
     (async () => {
       setFortLoading(true);
@@ -56,9 +54,6 @@ export default function FortPage() {
     })();
   }, []);
 
-  // Fort search runs entirely against data already loaded on the page
-  // (no extra network calls needed) since the whole off-season's data
-  // is small enough to filter client-side.
   function fortSuggestionMatches(query) {
     const q = query.trim().toLowerCase();
     if (q.length < 2 || fortAllStats.length === 0) return [];
@@ -232,7 +227,6 @@ export default function FortPage() {
           </>
         )}
       </section>
-
     </main>
   );
 }

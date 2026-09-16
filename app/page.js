@@ -3,11 +3,9 @@ import { useState, useEffect } from "react";
 import { supabasePublic } from "../lib/supabaseClient";
 import { computeDelta, computePoints, findRequirementTier, computeRequiredPoints } from "../lib/points";
 import StatsCharts from "./StatsCharts";
-import { Swords, Skull, ScrollText, Shield, Crown } from "lucide-react";
 import BarCompareChart from "./BarCompareChart";
+import { Swords, Skull, ScrollText, Shield, Crown, Trophy } from "lucide-react";
 
-// Shared helpers for KvK-vs-KvK comparisons -- fetch a single event's
-// baseline/latest snapshot pair, then sum stats from it.
 async function getEventBaselineLatest(eventId) {
   const { data: snaps } = await supabasePublic
     .from("snapshots").select("*").eq("kvk_event_id", eventId).order("uploaded_at", { ascending: true });
@@ -93,13 +91,9 @@ export default function Home() {
   const [linkFarm, setLinkFarm] = useState("");
   const [linkMsg, setLinkMsg] = useState("");
 
-  // Load every KvK event (past and present) once, on page load.
   useEffect(() => {
     (async () => {
-      const { data } = await supabasePublic
-        .from("kvk_events")
-        .select("*")
-        .order("id", { ascending: false });
+      const { data } = await supabasePublic.from("kvk_events").select("*").order("id", { ascending: false });
       setEvents(data || []);
       const active = data?.find((e) => e.is_active) || data?.[0];
       if (active) setSelectedEventId(String(active.id));
@@ -111,6 +105,17 @@ export default function Home() {
       }
     })();
   }, []);
+  useEffect(() => {
+    if (!selectedEventId) return;
+    (async () => {
+      const { data } = await supabasePublic
+        .from("snapshots").select("*").eq("kvk_event_id", selectedEventId).order("uploaded_at", { ascending: true });
+      setSnapshots(data || []);
+      if (data && data.length) setSelectedSnapshotId(String(data[data.length - 1].id));
+      else setSelectedSnapshotId("");
+    })();
+  }, [selectedEventId]);
+
   useEffect(() => {
     if (!compareEventA || !compareEventB) { setAllianceCompareData(null); return; }
     (async () => {
@@ -126,25 +131,6 @@ export default function Home() {
     })();
   }, [compareEventA, compareEventB]);
 
-  // Whenever the chosen KvK changes, load its snapshots (Day 1, Day 3, ...)
-  // and default the "view as of" picker to the newest one.
-  useEffect(() => {
-    if (!selectedEventId) return;
-    (async () => {
-      const { data } = await supabasePublic
-        .from("snapshots")
-        .select("*")
-        .eq("kvk_event_id", selectedEventId)
-        .order("uploaded_at", { ascending: true });
-      setSnapshots(data || []);
-      if (data && data.length) setSelectedSnapshotId(String(data[data.length - 1].id));
-      else setSelectedSnapshotId("");
-    })();
-  }, [selectedEventId]);
-
-  // Builds the top-kills / top-deaths leaderboards for whichever KvK and
-  // snapshot is currently selected. Farm accounts aren't listed on their
-  // own -- their (20%-weighted) stats are folded into their main account.
   useEffect(() => {
     if (!selectedEventId || snapshots.length === 0 || !selectedSnapshotId) {
       setLeaderboard(null);
@@ -164,14 +150,10 @@ export default function Home() {
       }
 
       const snapshotIds = baseline ? [baseline.id, latest.id] : [latest.id];
-      const { data: rows } = await supabasePublic
-        .from("governor_stats").select("*").in("snapshot_id", snapshotIds);
+      const { data: rows } = await supabasePublic.from("governor_stats").select("*").in("snapshot_id", snapshotIds);
       const baselineRows = baseline ? (rows || []).filter((r) => r.snapshot_id === baseline.id) : [];
       const latestRows = (rows || []).filter((r) => r.snapshot_id === latest.id);
 
-      // Raw alliance-wide totals (every governor row, farms included at
-      // full value -- this is "total kills/deaths that happened", not a
-      // per-governor attribution, so no 20% weighting here).
       let totalT4 = 0, totalT5 = 0, totalDeaths = 0;
       for (const l of latestRows) {
         const b = baselineRows.find((r) => r.governor_id === l.governor_id);
@@ -181,7 +163,7 @@ export default function Home() {
         totalDeaths += d.deaths;
       }
       const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name;
-      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName, updatedAt: latest.uploaded_at });
+      setAllianceTotals({ totalKills: totalT4 + totalT5, totalT4, totalT5, totalDeaths, eventName });
       setAllianceLoading(false);
 
       const { data: links } = await supabasePublic.from("account_links").select("*").eq("status", "approved");
@@ -191,7 +173,7 @@ export default function Home() {
 
       const totals = [];
       for (const l of latestRows) {
-        if (farmIds.has(l.governor_id)) continue; // shown under their main instead
+        if (farmIds.has(l.governor_id)) continue;
         const b = baselineRows.find((r) => r.governor_id === l.governor_id);
         const d = computeDelta(b, l);
         let kills = d.t4_kills + d.t5_kills;
@@ -214,8 +196,6 @@ export default function Home() {
     })();
   }, [selectedEventId, selectedSnapshotId, snapshots]);
 
-  // Live suggestions as the person types a name or ID -- debounced so
-  // it doesn't fire a query on every keystroke.
   useEffect(() => {
     const query = govId.trim();
     if (query.length < 2 || !selectedSnapshotId) { setSuggestions([]); return; }
@@ -256,7 +236,6 @@ export default function Home() {
         return;
       }
 
-      // Try an exact Governor ID match first; fall back to a name search.
       const { data: idRow } = await supabasePublic
         .from("governor_stats").select("governor_id,governor_name")
         .eq("snapshot_id", latest.id).eq("governor_id", query).maybeSingle();
@@ -301,23 +280,14 @@ export default function Home() {
     const eventName = events.find((e) => String(e.id) === String(selectedEventId))?.name || "";
     if (!latest) { setError("No stats uploaded yet for that KvK."); return; }
 
-    // find approved farm links for this governor
     const { data: links } = await supabasePublic
-      .from("account_links")
-      .select("*")
-      .eq("main_governor_id", id)
-      .eq("status", "approved");
+      .from("account_links").select("*").eq("main_governor_id", id).eq("status", "approved");
 
     const allIds = [id, ...(links || []).map((l) => l.farm_governor_id)];
 
-    // Pull every snapshot's rows for this governor (+ farms) in one go,
-    // both to compute the current view and to build the history chart.
     const snapshotIds = snapshots.map((s) => s.id);
     const { data: allRows } = await supabasePublic
-      .from("governor_stats")
-      .select("*")
-      .in("snapshot_id", snapshotIds)
-      .in("governor_id", allIds);
+      .from("governor_stats").select("*").in("snapshot_id", snapshotIds).in("governor_id", allIds);
 
     const baselineRows = baseline ? (allRows || []).filter((r) => r.snapshot_id === baseline.id) : [];
     const latestRows = (allRows || []).filter((r) => r.snapshot_id === latest.id);
@@ -327,20 +297,10 @@ export default function Home() {
       return;
     }
 
-    const { data: rules } = await supabasePublic
-      .from("point_rules")
-      .select("*")
-      .eq("kvk_event_id", selectedEventId);
-
+    const { data: rules } = await supabasePublic.from("point_rules").select("*").eq("kvk_event_id", selectedEventId);
     const { data: requirements } = await supabasePublic
-      .from("power_requirements")
-      .select("*")
-      .eq("kvk_event_id", selectedEventId)
-      .order("min_power", { ascending: true });
+      .from("power_requirements").select("*").eq("kvk_event_id", selectedEventId).order("min_power", { ascending: true });
 
-    // combine main + farms -- a linked farm account only counts 20% of
-    // its kills and deaths toward the main account (power and the
-    // informational stats stay at full value).
     const FARM_WEIGHT = 0.2;
     const mainId = id;
     let totalDelta = { power: 0, t4_kills: 0, t5_kills: 0, deaths: 0, acclaims: 0, healed_troops: 0, trades: 0 };
@@ -365,8 +325,6 @@ export default function Home() {
     const tier = findRequirementTier(totalDelta.power, requirements);
     const requirement = computeRequiredPoints(tier, rules);
 
-    // Build the "progress over time" series: one point per snapshot
-    // up through the one currently being viewed.
     const viewIndex = snapshots.findIndex((s) => String(s.id) === String(latest.id));
     const chartData = snapshots.slice(0, viewIndex + 1).map((s) => {
       const rows = (allRows || []).filter((r) => r.snapshot_id === s.id);
@@ -447,8 +405,14 @@ export default function Home() {
           <span className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 border border-brass text-brassBright px-3 py-1.5 rounded-sm">
             <ScrollText size={13} /> Home
           </span>
+          <a href="/rankings" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
+            <Trophy size={13} /> Rankings
+          </a>
           <a href="/fort" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
             <Shield size={13} /> Fort Tracker
+          </a>
+          <a href="/teleport" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
+            <Swords size={13} /> Pass 7 Teleport
           </a>
           <a href="/mge" className="flex items-center gap-1.5 font-data text-xs uppercase tracking-wide bg-panel2 hover:bg-panel3 border border-hairline text-steel hover:text-brassBright px-3 py-1.5 rounded-sm">
             <Swords size={13} /> MGE Application
@@ -479,26 +443,18 @@ export default function Home() {
 
       <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <select
-            className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm"
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-          >
+          <select className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm" value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)}>
             {events.map((ev) => (
               <option key={ev.id} value={ev.id}>{ev.name}{ev.is_active ? " (current)" : ""}</option>
             ))}
           </select>
-          <select
-            className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm"
-            value={selectedSnapshotId}
-            onChange={(e) => setSelectedSnapshotId(e.target.value)}
-          >
+          <select className="rounded-sm bg-panel2 border border-hairline px-3 py-2 text-sm" value={selectedSnapshotId} onChange={(e) => setSelectedSnapshotId(e.target.value)}>
             {snapshots.map((s) => (
               <option key={s.id} value={s.id}>View as of: {s.label}</option>
             ))}
           </select>
         </div>
-        <p className="text-xs text-steelDim">This picker controls both the leaderboards below and the governor search further down.</p>
+        <p className="text-xs text-steelDim">This picker controls both the leaderboard below and the governor search further down.</p>
       </section>
 
       <section className="bg-panel rounded-sm p-6 border border-hairline field-card space-y-4">

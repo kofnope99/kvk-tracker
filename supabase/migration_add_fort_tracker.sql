@@ -1,5 +1,3 @@
--- Only needed if you already ran schema.sql before the Fort Tracker
--- was added. Safe to run even if these tables already exist.
 create table if not exists fort_weeks (
   id bigint generated always as identity primary key,
   label text not null,

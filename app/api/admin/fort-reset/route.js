@@ -1,8 +1,6 @@
 import { supabaseAdmin } from "../../../../lib/supabaseClient";
 import { isAdmin } from "../../../../lib/checkAdmin";
 
-// Wipes the entire fort tracker -- every week and every governor's
-// fort stats -- for starting a new off-season from zero.
 export async function POST() {
   if (!isAdmin()) return Response.json({ ok: false }, { status: 401 });
   const admin = supabaseAdmin();

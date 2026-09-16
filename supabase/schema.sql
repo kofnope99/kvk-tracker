@@ -33,7 +33,7 @@ create index on governor_stats (snapshot_id, governor_id);
 create table point_rules (
   id bigint generated always as identity primary key,
   kvk_event_id bigint references kvk_events(id) on delete cascade,
-  stat_name text not null, -- 'deaths' | 't4_kills' | 't5_kills'
+  stat_name text not null,
   points_per_unit numeric not null default 0,
   unique(kvk_event_id, stat_name)
 );
@@ -51,13 +51,10 @@ create table account_links (
   id bigint generated always as identity primary key,
   main_governor_id text not null,
   farm_governor_id text not null unique,
-  status text default 'pending', -- pending | approved | rejected
+  status text default 'pending',
   requested_at timestamptz default now()
 );
 
--- Row Level Security: public can READ everything (it's just game stats),
--- but only the server (using the service role key) can WRITE, except
--- governors are allowed to submit a link request themselves.
 alter table kvk_events enable row level security;
 alter table snapshots enable row level security;
 alter table governor_stats enable row level security;

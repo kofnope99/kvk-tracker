@@ -1,7 +1,5 @@
 import { supabaseAdmin } from "../../../lib/supabaseClient";
 
-// Anyone can call this (a governor linking their own farm) -- it only
-// ever creates a "pending" row; an admin must approve it before it counts.
 export async function POST(req) {
   const { main_governor_id, farm_governor_id } = await req.json();
   if (!main_governor_id || !farm_governor_id) {

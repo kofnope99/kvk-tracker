@@ -6,8 +6,6 @@ export async function POST(req) {
   if (!isAdmin()) return Response.json({ ok: false }, { status: 401 });
   const admin = supabaseAdmin();
 
-  // Purge anything older than 14 days -- this data is deliberately
-  // temporary. Runs every time the admin panel loads this section.
   const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
   await admin.from("mge_applications").delete().lt("submitted_at", cutoff);
 

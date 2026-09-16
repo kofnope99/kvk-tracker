@@ -38,25 +38,8 @@ export default function AdminPage() {
   const [fortLabel, setFortLabel] = useState("");
   const [fortMsg, setFortMsg] = useState("");
 
-  async function refreshEventSnapshots(eventId) {
-    if (!eventId) return;
-    const { data } = await supabasePublic
-      .from("snapshots")
-      .select("*")
-      .eq("kvk_event_id", eventId)
-      .order("uploaded_at", { ascending: true });
-    setEventSnapshots(data || []);
-  }
-
-  async function deleteSnapshot(id) {
-    if (!confirm("Delete this snapshot and all its governor stats? This can't be undone.")) return;
-    await fetch("/api/admin/delete-snapshot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    refreshEventSnapshots(selectedEvent);
-  }
+  const [reminderMsg, setReminderMsg] = useState("");
+  const [reminderLoading, setReminderLoading] = useState(false);
 
   async function refreshEvents() {
     const { data } = await supabasePublic.from("kvk_events").select("*").order("id", { ascending: false });
@@ -67,6 +50,19 @@ export default function AdminPage() {
     if (!eventId) return;
     const { data } = await supabasePublic.from("power_requirements").select("*").eq("kvk_event_id", eventId).order("min_power");
     setRequirements(data || []);
+  }
+  async function refreshEventSnapshots(eventId) {
+    if (!eventId) return;
+    const { data } = await supabasePublic
+      .from("snapshots").select("*").eq("kvk_event_id", eventId).order("uploaded_at", { ascending: true });
+    setEventSnapshots(data || []);
+  }
+  async function deleteSnapshot(id) {
+    if (!confirm("Delete this snapshot and all its governor stats? This can't be undone.")) return;
+    await fetch("/api/admin/delete-snapshot", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+    });
+    refreshEventSnapshots(selectedEvent);
   }
   async function refreshPendingLinks() {
     const { data } = await supabasePublic.from("account_links").select("*").eq("status", "pending");
@@ -83,9 +79,7 @@ export default function AdminPage() {
 
   async function deleteMgeApplication(id) {
     await fetch("/api/admin/delete-mge-application", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
     });
     refreshMgeApplications();
   }
@@ -109,9 +103,7 @@ export default function AdminPage() {
 
   async function deleteFortWeek(id) {
     await fetch("/api/admin/delete-fort-week", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
     });
     refreshFortWeeks();
   }
@@ -120,6 +112,16 @@ export default function AdminPage() {
     if (!confirm("Reset the fort tracker? This deletes every uploaded week and can't be undone. Only do this at the start of a new off-season.")) return;
     await fetch("/api/admin/fort-reset", { method: "POST" });
     refreshFortWeeks();
+  }
+
+  async function sendKingslandReminder() {
+    if (!confirm("Send a @everyone Discord reminder listing every 55M+ power governor below the current KvK minimum? This can't be undone.")) return;
+    setReminderLoading(true);
+    setReminderMsg("");
+    const res = await fetch("/api/admin/send-reminder", { method: "POST" });
+    const data = await res.json();
+    setReminderMsg(data.ok ? `Sent — ${data.count} governor(s) flagged and pinged.` : `Error: ${data.error}`);
+    setReminderLoading(false);
   }
 
   useEffect(() => {
@@ -141,9 +143,7 @@ export default function AdminPage() {
     e.preventDefault();
     setLoginError("");
     const res = await fetch("/api/admin-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }),
     });
     const data = await res.json();
     if (data.ok) setLoggedIn(true);
@@ -153,9 +153,7 @@ export default function AdminPage() {
   async function createEvent(e) {
     e.preventDefault();
     await fetch("/api/admin/kvk-events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newEventName }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newEventName }),
     });
     setNewEventName("");
     refreshEvents();
@@ -178,8 +176,7 @@ export default function AdminPage() {
   async function saveRules(e) {
     e.preventDefault();
     const res = await fetch("/api/admin/point-rules", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kvk_event_id: selectedEvent, t4_kills: t4, t5_kills: t5, deaths: deathPts }),
     });
     const data = await res.json();
@@ -189,8 +186,7 @@ export default function AdminPage() {
   async function addRequirement(e) {
     e.preventDefault();
     const res = await fetch("/api/admin/power-requirements", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kvk_event_id: selectedEvent,
         min_power: Number(minPower),
@@ -206,18 +202,14 @@ export default function AdminPage() {
 
   async function activateEvent() {
     await fetch("/api/admin/activate-event", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selectedEvent }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: selectedEvent }),
     });
     refreshEvents();
   }
 
   async function decideLink(id, status) {
     await fetch("/api/admin/links", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }),
     });
     refreshPendingLinks();
   }
@@ -227,7 +219,7 @@ export default function AdminPage() {
       <main className="max-w-sm mx-auto mt-20">
         <form onSubmit={login} className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
           <h1 className="font-display text-lg uppercase tracking-wide text-paper">Admin Login</h1>
-          <input type="password" className="w-full rounded-sm bg-panel2 px-3 py-2" placeholder="Password"
+          <input type="password" className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
           {loginError && <p className="text-flareBright text-sm">{loginError}</p>}
           <button className="w-full bg-brass hover:bg-brassBright text-ink py-2 rounded-sm font-semibold">Log in</button>
@@ -246,11 +238,11 @@ export default function AdminPage() {
       <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
         <h2 className="font-display text-lg uppercase tracking-wide text-paper">KvK Events</h2>
         <form onSubmit={createEvent} className="flex gap-2">
-          <input className="flex-1 rounded-sm bg-panel2 px-3 py-2" placeholder="e.g. KvK Season 5"
+          <input className="flex-1 rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="e.g. KvK Season 5"
             value={newEventName} onChange={(e) => setNewEventName(e.target.value)} required />
-          <button className="bg-panel2 hover:bg-panel3 px-4 py-2 rounded-sm">Create</button>
+          <button className="bg-panel2 hover:bg-panel3 border border-hairline px-4 py-2 rounded-sm">Create</button>
         </form>
-        <select className="w-full rounded-sm bg-panel2 px-3 py-2" value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)}>
+        <select className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2" value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)}>
           {events.map((ev) => <option key={ev.id} value={ev.id}>{ev.name}{ev.is_active ? " (active)" : ""}</option>)}
         </select>
         <div className="flex items-center justify-between">
@@ -270,7 +262,7 @@ export default function AdminPage() {
         </p>
         <form onSubmit={upload} className="space-y-3">
           <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files[0])} required className="text-sm" />
-          <input className="w-full rounded-sm bg-panel2 px-3 py-2" placeholder="Label (e.g. Day 3)"
+          <input className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Label (e.g. Day 3)"
             value={label} onChange={(e) => setLabel(e.target.value)} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isBaseline} onChange={(e) => setIsBaseline(e.target.checked)} />
@@ -285,7 +277,7 @@ export default function AdminPage() {
             <p className="text-sm text-steel mb-2">Uploaded snapshots for this KvK:</p>
             <ul className="space-y-2">
               {eventSnapshots.map((s) => (
-                <li key={s.id} className="flex items-center justify-between bg-panel2 rounded-sm px-3 py-2">
+                <li key={s.id} className="flex items-center justify-between bg-panel2 rounded-sm border border-hairline px-3 py-2">
                   <span className="text-sm">{s.label}{s.is_baseline ? " (baseline)" : ""}</span>
                   <button onClick={() => deleteSnapshot(s.id)} className="text-xs bg-flare hover:bg-flareBright text-ink font-semibold px-3 py-1 rounded">
                     Delete
@@ -300,10 +292,10 @@ export default function AdminPage() {
       <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
         <h2 className="font-display text-lg uppercase tracking-wide text-paper">Point values</h2>
         <form onSubmit={saveRules} className="grid grid-cols-3 gap-3">
-          <label className="text-sm">T4 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={t4} onChange={(e) => setT4(e.target.value)} /></label>
-          <label className="text-sm">T5 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={t5} onChange={(e) => setT5(e.target.value)} /></label>
-          <label className="text-sm">Death<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 px-3 py-2 mt-1" value={deathPts} onChange={(e) => setDeathPts(e.target.value)} /></label>
-          <button className="col-span-3 bg-panel2 hover:bg-panel3 py-2 rounded-sm">Save point values</button>
+          <label className="text-sm">T4 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2 mt-1" value={t4} onChange={(e) => setT4(e.target.value)} /></label>
+          <label className="text-sm">T5 kill<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2 mt-1" value={t5} onChange={(e) => setT5(e.target.value)} /></label>
+          <label className="text-sm">Death<input type="number" step="0.01" className="w-full rounded-sm bg-panel2 border border-hairline px-3 py-2 mt-1" value={deathPts} onChange={(e) => setDeathPts(e.target.value)} /></label>
+          <button className="col-span-3 bg-panel2 hover:bg-panel3 border border-hairline py-2 rounded-sm">Save point values</button>
         </form>
         {rulesMsg && <p className="text-sm text-steel">{rulesMsg}</p>}
       </section>
@@ -314,11 +306,11 @@ export default function AdminPage() {
           Enter your existing tiers exactly like your "Minimum" sheet (min death count, min kill count per power bracket). The site converts these into a points target automatically using your point values above (min kills × T5 weight + min deaths × Death weight — same as your spreadsheet's Min. Contribution formula).
         </p>
         <form onSubmit={addRequirement} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min power" value={minPower} onChange={(e) => setMinPower(e.target.value)} required />
-          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Max power (blank = no cap)" value={maxPower} onChange={(e) => setMaxPower(e.target.value)} />
-          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min deaths" value={minDeaths} onChange={(e) => setMinDeaths(e.target.value)} required />
-          <input className="rounded-sm bg-panel2 px-3 py-2" placeholder="Min kills" value={minKills} onChange={(e) => setMinKills(e.target.value)} required />
-          <button className="col-span-2 sm:col-span-4 bg-panel2 hover:bg-panel3 py-2 rounded-sm">Add tier</button>
+          <input className="rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Min power" value={minPower} onChange={(e) => setMinPower(e.target.value)} required />
+          <input className="rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Max power (blank = no cap)" value={maxPower} onChange={(e) => setMaxPower(e.target.value)} />
+          <input className="rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Min deaths" value={minDeaths} onChange={(e) => setMinDeaths(e.target.value)} required />
+          <input className="rounded-sm bg-panel2 border border-hairline px-3 py-2" placeholder="Min kills" value={minKills} onChange={(e) => setMinKills(e.target.value)} required />
+          <button className="col-span-2 sm:col-span-4 bg-panel2 hover:bg-panel3 border border-hairline py-2 rounded-sm">Add tier</button>
         </form>
         {reqMsg && <p className="text-sm text-steel">{reqMsg}</p>}
         <ul className="text-sm space-y-1">
@@ -335,7 +327,7 @@ export default function AdminPage() {
         {pendingLinks.length === 0 && <p className="text-sm text-steel">None right now.</p>}
         <ul className="space-y-2">
           {pendingLinks.map((l) => (
-            <li key={l.id} className="flex items-center justify-between bg-panel2 rounded-sm px-3 py-2">
+            <li key={l.id} className="flex items-center justify-between bg-panel2 rounded-sm border border-hairline px-3 py-2">
               <span className="text-sm">Main: {l.main_governor_id} ← Farm: {l.farm_governor_id}</span>
               <span className="flex gap-2">
                 <button onClick={() => decideLink(l.id, "approved")} className="text-xs bg-drab hover:bg-drabBright text-ink font-semibold px-3 py-1 rounded">Approve</button>
@@ -347,10 +339,7 @@ export default function AdminPage() {
       </section>
 
       <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg uppercase tracking-wide text-paper">MGE applications</h2>
-          <span className="font-data text-[10px] text-steelDim uppercase">Auto-deleted after 14 days</span>
-        </div>
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">MGE applications</h2>
         <p className="text-xs text-steelDim">
           Share this link with players: <span className="font-data">yoursite.vercel.app/mge</span>. T4/T5 kills shown are from each applicant's most recent 3 KvKs.
         </p>
@@ -422,6 +411,17 @@ export default function AdminPage() {
             </ul>
           </div>
         )}
+      </section>
+
+      <section className="bg-panel rounded-sm border border-hairline p-6 space-y-4">
+        <h2 className="font-display text-lg uppercase tracking-wide text-paper">Kingsland Reminder</h2>
+        <p className="text-sm text-steel">
+          Sends a @everyone announcement to your Discord admin channel, listing every governor above 55M power (using their combined main+farm stats) who hasn't yet met the current KvK's minimum requirement, with a reminder to meet it before the end of Kingsland. This does not save or store anything — it only sends the message.
+        </p>
+        <button onClick={sendKingslandReminder} disabled={reminderLoading} className="bg-flare hover:bg-flareBright text-ink font-semibold px-4 py-2 rounded-sm font-display uppercase tracking-wide">
+          {reminderLoading ? "Sending..." : "Send Kingsland Reminder"}
+        </button>
+        {reminderMsg && <p className="text-sm text-steel">{reminderMsg}</p>}
       </section>
     </main>
   );

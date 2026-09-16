@@ -3,9 +3,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList,
 } from "recharts";
 
-// data: [{ name: 'T4 Kills', A: 123, B: 456 }, ...]
-// Horizontal grouped bars -- reads more clearly than a radar chart when
-// there are only 3-4 categories to compare.
 export default function BarCompareChart({ data, labelA, labelB }) {
   if (!data || data.length === 0) {
     return <p className="text-sm text-steelDim font-data">No data to compare yet.</p>;
