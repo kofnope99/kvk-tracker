@@ -79,8 +79,8 @@ export async function POST() {
     return Response.json({ ok: true, count: 0 });
   }
 
-  if (!process.env.DISCORD_WEBHOOK_URL) {
-    return Response.json({ ok: false, error: "DISCORD_WEBHOOK_URL isn't configured" }, { status: 500 });
+  if (!process.env.ANNOUNCEMENT_WEBHOOK_URL) {
+    return Response.json({ ok: false, error: "ANNOUNCEMENT_WEBHOOK_URL isn't configured" }, { status: 500 });
   }
 
   const header =
@@ -96,7 +96,7 @@ export async function POST() {
 
   try {
     for (const content of chunks) {
-      await fetch(process.env.DISCORD_WEBHOOK_URL, {
+      await fetch(process.env.ANNOUNCEMENT_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),

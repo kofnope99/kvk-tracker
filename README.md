@@ -37,6 +37,7 @@ Supabase (database) and Vercel (hosting), both free at your scale.
    | `ADMIN_PASSWORD` | any password you choose |
    | `DISCORD_WEBHOOK_URL` | your admin channel's webhook (see below) |
    | `TELEPORT_WEBHOOK_URL` | webhook for the Pass 7 Teleport channel |
+   | `ANNOUNCEMENT_WEBHOOK_URL` | webhook for the Kingsland Reminder's channel |
 
 3. Click **Deploy**. You'll get a live URL like `kvk-tracker.vercel.app`.
 
@@ -84,7 +85,8 @@ Supabase (database) and Vercel (hosting), both free at your scale.
   relayed straight to its own Discord channel (`TELEPORT_WEBHOOK_URL`)
   and discarded.
 - **Kingsland Reminder** button (in `/admin`) — sends a single
-  `@everyone` Discord message listing every governor above 55M power
+  `@everyone` Discord message (to its own channel, via
+  `ANNOUNCEMENT_WEBHOOK_URL`) listing every governor above 55M power
   who hasn't met the current KvK's minimum requirement yet, reminding
   them to do so before the end of Kingsland. Nothing is stored; it
   only sends the message. Long lists are split across multiple
@@ -92,15 +94,16 @@ Supabase (database) and Vercel (hosting), both free at your scale.
 
 ## Setting up the Discord webhooks
 
-You need two, if you want both features:
+You need up to three, depending on which features you use:
 
 1. In Discord, open the target channel → gear icon → **Integrations**
    → **Webhooks** → **New Webhook** → name it → **Copy Webhook URL**.
-2. Do this once for your admin channel (`DISCORD_WEBHOOK_URL`, used by
-   MGE applications and the Kingsland Reminder) and once for wherever
-   Pass 7 Teleport submissions should land (`TELEPORT_WEBHOOK_URL`) —
-   these can be the same channel or different ones.
-3. Add both URLs as environment variables in Vercel.
+2. Do this for: your admin channel (`DISCORD_WEBHOOK_URL`, used by MGE
+   applications), wherever Pass 7 Teleport submissions should land
+   (`TELEPORT_WEBHOOK_URL`), and your announcement channel
+   (`ANNOUNCEMENT_WEBHOOK_URL`, used by the Kingsland Reminder button)
+   — these can all be the same channel or all different ones.
+3. Add each URL as an environment variable in Vercel.
 
 If a webhook variable isn't set, that specific feature's Discord
 message just won't send — nothing else breaks.
