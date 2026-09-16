@@ -79,6 +79,10 @@ export async function POST() {
     return Response.json({ ok: true, count: 0 });
   }
 
+  console.log("DEBUG send-reminder: ANNOUNCEMENT_WEBHOOK_URL set?", Boolean(process.env.ANNOUNCEMENT_WEBHOOK_URL));
+  console.log("DEBUG send-reminder: same as DISCORD_WEBHOOK_URL?", process.env.ANNOUNCEMENT_WEBHOOK_URL === process.env.DISCORD_WEBHOOK_URL);
+  console.log("DEBUG send-reminder: ANNOUNCEMENT_WEBHOOK_URL length:", (process.env.ANNOUNCEMENT_WEBHOOK_URL || "").length);
+
   if (!process.env.ANNOUNCEMENT_WEBHOOK_URL) {
     return Response.json({ ok: false, error: "ANNOUNCEMENT_WEBHOOK_URL isn't configured" }, { status: 500 });
   }
