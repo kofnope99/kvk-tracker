@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background-color: #16191C;
+  background-image: radial-gradient(circle at 50% 0%, rgba(201, 162, 75, 0.08), transparent 60%);
+  color: #EDE3CE;
+}
+
+.stamp {
+  display: inline-block;
+  transform: rotate(-6deg);
+  border: 2px solid currentColor;
+  border-radius: 9999px;
+  padding: 2px 14px;
+  letter-spacing: 0.15em;
+  font-family: var(--font-cinzel), serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #1B1F23; }
+::-webkit-scrollbar-thumb { background: #3A3F45; border-radius: 6px; }
