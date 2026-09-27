@@ -35,7 +35,7 @@ export async function GET() {
       .from("snapshots")
       .select("*")
       .eq("kvk_event_id", ev.id)
-      .order("created_at", { ascending: true });
+      .order("uploaded_at", { ascending: true });
     if (!snaps?.length) continue;
     const baseline = snaps.find((s) => s.is_baseline);
     const latest = snaps[snaps.length - 1];

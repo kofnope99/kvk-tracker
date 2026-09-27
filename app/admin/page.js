@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import NavBar from "../../components/NavBar";
-import { supabasePublic } from "../../lib/supabaseClient";
 import { formatCompact } from "../../lib/points";
-import { getKvkEvents } from "../../lib/kvkHistory";
+import { getKvkEvents, getPointRules, getRequirements } from "../../lib/kvkHistory";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -20,8 +19,14 @@ export default function AdminPage() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadMsg, setUploadMsg] = useState("");
 
+  // Point rules and requirement tiers are both scoped PER KVK EVENT in the
+  // real schema, so both sections share one "which KvK am I configuring"
+  // selector rather than editing one global config.
+  const [configEventId, setConfigEventId] = useState("");
   const [rules, setRules] = useState({ t4_weight: 10, t5_weight: 12, death_weight: 60 });
   const [requirements, setRequirements] = useState([]);
+  const [rulesMsg, setRulesMsg] = useState("");
+  const [reqMsg, setReqMsg] = useState("");
 
   const [links, setLinks] = useState([]);
 
@@ -36,14 +41,12 @@ export default function AdminPage() {
   const [sendingReminder, setSendingReminder] = useState(false);
 
   async function refreshAll() {
-    const [ev, rq] = await Promise.all([
-      getKvkEvents(),
-      supabasePublic.from("power_requirements").select("*").order("min_power", { ascending: true }),
-    ]);
+    const ev = await getKvkEvents();
     setEvents(ev);
-    setRequirements(rq.data || []);
-    const { data: pr } = await supabasePublic.from("point_rules").select("*").limit(1).single();
-    if (pr) setRules(pr);
+    if (ev.length && !configEventId) {
+      const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
+      setConfigEventId(active.id);
+    }
 
     const linksRes = await fetch("/api/admin/farm-links");
     if (linksRes.ok) setLinks((await linksRes.json()).links || []);
@@ -58,7 +61,19 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (authed) refreshAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed]);
+
+  // Load this KvK's point rules + requirement tiers whenever the config
+  // selector changes (including the first time it's set above).
+  useEffect(() => {
+    if (!configEventId) return;
+    (async () => {
+      const [pr, rq] = await Promise.all([getPointRules(configEventId), getRequirements(configEventId)]);
+      setRules(pr);
+      setRequirements(rq);
+    })();
+  }, [configEventId]);
 
   async function login(e) {
     e.preventDefault();
@@ -113,12 +128,18 @@ export default function AdminPage() {
 
   async function saveRules(e) {
     e.preventDefault();
-    await fetch("/api/admin/point-rules", {
+    setRulesMsg("");
+    if (!configEventId) {
+      setRulesMsg("Pick a KvK to configure first.");
+      return;
+    }
+    const res = await fetch("/api/admin/point-rules", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(rules),
+      body: JSON.stringify({ kvk_event_id: configEventId, ...rules }),
     });
-    refreshAll();
+    const json = await res.json();
+    setRulesMsg(json.ok ? "Saved." : json.error || "Something went wrong.");
   }
 
   function updateTier(i, field, value) {
@@ -131,13 +152,27 @@ export default function AdminPage() {
     setRequirements([...requirements, { min_power: 0, max_power: null, min_deaths: 0, min_kills: 0 }]);
   }
 
+  function removeTier(i) {
+    setRequirements(requirements.filter((_, idx) => idx !== i));
+  }
+
   async function saveRequirements() {
-    await fetch("/api/admin/requirements", {
+    setReqMsg("");
+    if (!configEventId) {
+      setReqMsg("Pick a KvK to configure first.");
+      return;
+    }
+    const res = await fetch("/api/admin/requirements", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requirements }),
+      body: JSON.stringify({ kvk_event_id: configEventId, requirements }),
     });
-    refreshAll();
+    const json = await res.json();
+    setReqMsg(json.ok ? "Saved." : json.error || "Something went wrong.");
+    if (json.ok) {
+      const rq = await getRequirements(configEventId);
+      setRequirements(rq);
+    }
   }
 
   async function setLinkStatus(id, status) {
@@ -269,6 +304,25 @@ export default function AdminPage() {
           </form>
         </section>
 
+        {/* Which KvK's point rules / requirements are being edited */}
+        <section className="bg-panel border border-hairline rounded-lg p-6 space-y-3">
+          <h2 className="font-display text-lg text-brassBright">Configuring KvK</h2>
+          <p className="text-steel text-sm">
+            Point values and minimum requirements are set per KvK event — pick which one to edit below.
+          </p>
+          <select
+            className="w-full bg-panel2 border border-hairline rounded px-4 py-2 font-mono text-paper"
+            value={configEventId}
+            onChange={(e) => setConfigEventId(e.target.value)}
+          >
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name} {ev.is_active ? "★" : ""}
+              </option>
+            ))}
+          </select>
+        </section>
+
         {/* Point values */}
         <section className="bg-panel border border-hairline rounded-lg p-6 space-y-4">
           <h2 className="font-display text-lg text-brassBright">Point Values</h2>
@@ -287,6 +341,7 @@ export default function AdminPage() {
             <button className="col-span-3 bg-brass hover:bg-brassBright text-ink font-display px-4 py-2 rounded">
               Save
             </button>
+            {rulesMsg && <p className="col-span-3 text-sm text-steel">{rulesMsg}</p>}
           </form>
         </section>
 
@@ -295,7 +350,7 @@ export default function AdminPage() {
           <h2 className="font-display text-lg text-brassBright">Minimum Requirements</h2>
           <div className="space-y-2">
             {requirements.map((r, i) => (
-              <div key={i} className="grid grid-cols-4 gap-2">
+              <div key={i} className="grid grid-cols-5 gap-2 items-center">
                 <input
                   type="number"
                   placeholder="Min power"
@@ -324,16 +379,21 @@ export default function AdminPage() {
                   value={r.min_kills ?? ""}
                   onChange={(e) => updateTier(i, "min_kills", e.target.value)}
                 />
+                <button onClick={() => removeTier(i)} className="text-flareBright text-xs">
+                  Remove
+                </button>
               </div>
             ))}
+            {requirements.length === 0 && <p className="text-steelDim text-sm">No tiers yet for this KvK.</p>}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <button onClick={addTier} className="bg-panel2 border border-hairline text-paper px-4 py-2 rounded text-sm">
               + Add tier
             </button>
             <button onClick={saveRequirements} className="bg-brass hover:bg-brassBright text-ink font-display px-4 py-2 rounded">
               Save tiers
             </button>
+            {reqMsg && <p className="text-sm text-steel">{reqMsg}</p>}
           </div>
         </section>
 

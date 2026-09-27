@@ -39,27 +39,51 @@ export default function HomePage() {
   const [farmForm, setFarmForm] = useState({ main_governor_id: "", farm_governor_id: "" });
   const [farmMsg, setFarmMsg] = useState("");
 
-  // Initial load
+  // Initial load: events + approved farm links (not tied to any one KvK)
   useEffect(() => {
     (async () => {
-      setLoading(true);
       setLoadError("");
       try {
-        const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
+        const [ev, lk] = await Promise.all([getKvkEvents(), getApprovedLinks()]);
         setEvents(ev);
         setLinks(lk);
-        setRules(pr);
-        setRequirements(rq);
         if (!ev.length) {
           setLoadError("No KvK events found yet — create one in the admin panel.");
+          setLoading(false);
           return;
         }
         const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
         setSelectedEventId(active.id);
-        const snaps = await getSnapshots(active.id);
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  // Point rules and requirement tiers are scoped PER KVK EVENT, not global —
+  // reload snapshots + rules + requirements together whenever the selected
+  // event changes (including the very first time it's set above).
+  useEffect(() => {
+    if (!selectedEventId) return;
+    (async () => {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const [snaps, pr, rq] = await Promise.all([
+          getSnapshots(selectedEventId),
+          getPointRules(selectedEventId),
+          getRequirements(selectedEventId),
+        ]);
         setSnapshots(snaps);
-        if (snaps.length) setSelectedSnapshotId(snaps[snaps.length - 1].id);
-        else setLoadError(`"${active.name}" has no snapshots uploaded yet.`);
+        setRules(pr);
+        setRequirements(rq);
+        setSelectedSnapshotId(snaps.length ? snaps[snaps.length - 1].id : "");
+        if (!snaps.length) {
+          const ev = events.find((e) => e.id === selectedEventId);
+          setLoadError(`"${ev?.name || "This KvK"}" has no snapshots uploaded yet.`);
+        }
       } catch (err) {
         console.error(err);
         setLoadError(err?.message || String(err));
@@ -67,26 +91,12 @@ export default function HomePage() {
         setLoading(false);
       }
     })();
-  }, []);
-
-  // When event changes, reload its snapshots
-  useEffect(() => {
-    if (!selectedEventId) return;
-    (async () => {
-      try {
-        const snaps = await getSnapshots(selectedEventId);
-        setSnapshots(snaps);
-        setSelectedSnapshotId(snaps.length ? snaps[snaps.length - 1].id : "");
-      } catch (err) {
-        console.error(err);
-        setLoadError(err?.message || String(err));
-      }
-    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId]);
 
   // Recompute the aggregated leaderboard whenever selection changes
   useEffect(() => {
-    if (!selectedSnapshotId || !snapshots.length) {
+    if (!selectedSnapshotId || !snapshots.length || !rules) {
       setRows([]);
       return;
     }
@@ -164,13 +174,20 @@ export default function HomePage() {
       setCompareData(null);
       return;
     }
-    const [snapsA, snapsB] = await Promise.all([getSnapshots(selectedEventId), getSnapshots(eventId)]);
+    // Each KvK has its own point rules and requirement tiers, so load
+    // event B's own config rather than reusing event A's.
+    const [snapsA, snapsB, prB, rqB] = await Promise.all([
+      getSnapshots(selectedEventId),
+      getSnapshots(eventId),
+      getPointRules(eventId),
+      getRequirements(eventId),
+    ]);
     const [pairA, pairB] = await Promise.all([
       loadSnapshotPair(snapsA, snapsA[snapsA.length - 1]?.id),
       loadSnapshotPair(snapsB, snapsB[snapsB.length - 1]?.id),
     ]);
     const rowsA = aggregateGovernors(pairA.baselineRows, pairA.latestRows, links, rules, requirements);
-    const rowsB = aggregateGovernors(pairB.baselineRows, pairB.latestRows, links, rules, requirements);
+    const rowsB = aggregateGovernors(pairB.baselineRows, pairB.latestRows, links, prB, rqB);
     const sum = (arr, f) => arr.reduce((a, r) => a + r[f], 0);
     const eventA = events.find((e) => e.id === selectedEventId);
     const eventB = events.find((e) => e.id === eventId);

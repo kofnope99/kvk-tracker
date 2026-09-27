@@ -4,6 +4,8 @@ import { formatCompact } from "../../../../lib/points";
 import { aggregateGovernors } from "../../../../lib/aggregate";
 
 const POWER_THRESHOLD = 55_000_000;
+const STAT_NAME_TO_RULE_KEY = { t4_kills: "t4_weight", t5_kills: "t5_weight", deaths: "death_weight" };
+const DEFAULT_RULES = { t4_weight: 10, t5_weight: 12, death_weight: 60 };
 
 function chunkMessage(lines, header) {
   const chunks = [];
@@ -35,23 +37,28 @@ export async function POST() {
     .from("snapshots")
     .select("*")
     .eq("kvk_event_id", events.id)
-    .order("created_at", { ascending: true });
+    .order("uploaded_at", { ascending: true });
   if (!snapshots?.length) return Response.json({ ok: false, error: "No snapshots uploaded for the active KvK" }, { status: 400 });
 
   const baseline = snapshots.find((s) => s.is_baseline);
   const latest = snapshots[snapshots.length - 1];
 
-  const [latestRows, baselineRows, links, rulesRes, requirements] = await Promise.all([
+  const [latestRows, baselineRows, links, pointRuleRows, requirements] = await Promise.all([
     admin.from("governor_stats").select("*").eq("snapshot_id", latest.id).then((r) => r.data || []),
     baseline && baseline.id !== latest.id
       ? admin.from("governor_stats").select("*").eq("snapshot_id", baseline.id).then((r) => r.data || [])
       : Promise.resolve([]),
     admin.from("account_links").select("*").eq("status", "approved").then((r) => r.data || []),
-    admin.from("point_rules").select("*").limit(1).single(),
-    admin.from("power_requirements").select("*").order("min_power", { ascending: true }).then((r) => r.data || []),
+    admin.from("point_rules").select("*").eq("kvk_event_id", events.id).then((r) => r.data || []),
+    admin.from("power_requirements").select("*").eq("kvk_event_id", events.id).order("min_power", { ascending: true }).then((r) => r.data || []),
   ]);
 
-  const rules = rulesRes?.data || { t4_weight: 10, t5_weight: 12, death_weight: 60 };
+  const rules = { ...DEFAULT_RULES };
+  for (const row of pointRuleRows) {
+    const key = STAT_NAME_TO_RULE_KEY[row.stat_name];
+    if (key) rules[key] = Number(row.points_per_unit);
+  }
+
   const rows = aggregateGovernors(baselineRows, latestRows, links, rules, requirements);
 
   const behind = rows

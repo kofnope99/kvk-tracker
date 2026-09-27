@@ -29,27 +29,16 @@ export default function RankingsPage() {
       setLoading(true);
       setLoadError("");
       try {
-        const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
+        const [ev, lk] = await Promise.all([getKvkEvents(), getApprovedLinks()]);
         setEvents(ev);
         window.__k2194_links = lk;
-        window.__k2194_rules = pr;
-        window.__k2194_req = rq;
         if (!ev.length) {
           setLoadError("No KvK events found yet — create one in the admin panel.");
           return;
         }
         const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
         setSelectedEventId(active.id);
-        const snaps = await getSnapshots(active.id);
-        setSnapshots(snaps);
-        if (!snaps.length) {
-          setLoadError(`"${active.name}" has no snapshots uploaded yet.`);
-          return;
-        }
-        const lastId = snaps[snaps.length - 1].id;
-        setSelectedSnapshotId(lastId);
-        const { baselineRows, latestRows } = await loadSnapshotPair(snaps, lastId);
-        setRows(aggregateGovernors(baselineRows, latestRows, lk, pr, rq).sort((a, b) => b.points - a.points));
+        await loadForEvent(active, lk);
       } catch (err) {
         console.error(err);
         setLoadError(err?.message || String(err));
@@ -59,13 +48,42 @@ export default function RankingsPage() {
     })();
   }, []);
 
+  // Snapshots, point rules and requirement tiers are all scoped per KvK
+  // event — reload them together whenever the selected event changes.
+  async function loadForEvent(event, links) {
+    const [snaps, pr, rq] = await Promise.all([
+      getSnapshots(event.id),
+      getPointRules(event.id),
+      getRequirements(event.id),
+    ]);
+    setSnapshots(snaps);
+    window.__k2194_rules = pr;
+    window.__k2194_req = rq;
+    if (!snaps.length) {
+      setLoadError(`"${event.name}" has no snapshots uploaded yet.`);
+      setSelectedSnapshotId("");
+      setRows([]);
+      return;
+    }
+    const lastId = snaps[snaps.length - 1].id;
+    setSelectedSnapshotId(lastId);
+    const { baselineRows, latestRows } = await loadSnapshotPair(snaps, lastId);
+    setRows(aggregateGovernors(baselineRows, latestRows, links, pr, rq).sort((a, b) => b.points - a.points));
+  }
+
   async function changeEvent(eventId) {
     setSelectedEventId(eventId);
-    const snaps = await getSnapshots(eventId);
-    setSnapshots(snaps);
-    const lastId = snaps.length ? snaps[snaps.length - 1].id : "";
-    setSelectedSnapshotId(lastId);
-    if (lastId) await recompute(snaps, lastId);
+    setLoading(true);
+    setLoadError("");
+    try {
+      const event = events.find((e) => e.id === eventId);
+      await loadForEvent(event, window.__k2194_links);
+    } catch (err) {
+      console.error(err);
+      setLoadError(err?.message || String(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function changeSnapshot(snapshotId) {
