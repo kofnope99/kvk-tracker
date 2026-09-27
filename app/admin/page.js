@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import NavBar from "../../components/NavBar";
 import { supabasePublic } from "../../lib/supabaseClient";
 import { formatCompact } from "../../lib/points";
+import { getKvkEvents } from "../../lib/kvkHistory";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -36,10 +37,10 @@ export default function AdminPage() {
 
   async function refreshAll() {
     const [ev, rq] = await Promise.all([
-      supabasePublic.from("kvk_events").select("*").order("created_at", { ascending: true }),
+      getKvkEvents(),
       supabasePublic.from("power_requirements").select("*").order("min_power", { ascending: true }),
     ]);
-    setEvents(ev.data || []);
+    setEvents(ev);
     setRequirements(rq.data || []);
     const { data: pr } = await supabasePublic.from("point_rules").select("*").limit(1).single();
     if (pr) setRules(pr);
