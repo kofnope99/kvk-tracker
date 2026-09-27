@@ -27,6 +27,7 @@ export default function HomePage() {
   const [requirements, setRequirements] = useState([]);
   const [rows, setRows] = useState([]); // aggregated governors for selected KvK+snapshot
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const [searchResult, setSearchResult] = useState(null);
   const [searchError, setSearchError] = useState("");
@@ -42,19 +43,29 @@ export default function HomePage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
-      setEvents(ev);
-      setLinks(lk);
-      setRules(pr);
-      setRequirements(rq);
-      const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
-      if (active) {
+      setLoadError("");
+      try {
+        const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
+        setEvents(ev);
+        setLinks(lk);
+        setRules(pr);
+        setRequirements(rq);
+        if (!ev.length) {
+          setLoadError("No KvK events found yet — create one in the admin panel.");
+          return;
+        }
+        const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
         setSelectedEventId(active.id);
         const snaps = await getSnapshots(active.id);
         setSnapshots(snaps);
         if (snaps.length) setSelectedSnapshotId(snaps[snaps.length - 1].id);
+        else setLoadError(`"${active.name}" has no snapshots uploaded yet.`);
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
@@ -62,9 +73,14 @@ export default function HomePage() {
   useEffect(() => {
     if (!selectedEventId) return;
     (async () => {
-      const snaps = await getSnapshots(selectedEventId);
-      setSnapshots(snaps);
-      setSelectedSnapshotId(snaps.length ? snaps[snaps.length - 1].id : "");
+      try {
+        const snaps = await getSnapshots(selectedEventId);
+        setSnapshots(snaps);
+        setSelectedSnapshotId(snaps.length ? snaps[snaps.length - 1].id : "");
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+      }
     })();
   }, [selectedEventId]);
 
@@ -75,8 +91,13 @@ export default function HomePage() {
       return;
     }
     (async () => {
-      const { baselineRows, latestRows } = await loadSnapshotPair(snapshots, selectedSnapshotId);
-      setRows(aggregateGovernors(baselineRows, latestRows, links, rules, requirements));
+      try {
+        const { baselineRows, latestRows } = await loadSnapshotPair(snapshots, selectedSnapshotId);
+        setRows(aggregateGovernors(baselineRows, latestRows, links, rules, requirements));
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+      }
     })();
   }, [selectedSnapshotId, snapshots, links, rules, requirements]);
 
@@ -217,6 +238,8 @@ export default function HomePage() {
 
         {loading ? (
           <p className="text-center text-steel font-mono">Loading the ledger…</p>
+        ) : loadError ? (
+          <p className="text-center text-flareBright font-mono">{loadError}</p>
         ) : (
           <>
             {/* Alliance totals */}

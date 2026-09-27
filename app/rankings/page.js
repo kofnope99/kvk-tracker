@@ -21,29 +21,41 @@ export default function RankingsPage() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [highlightId, setHighlightId] = useState("");
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
-      setEvents(ev);
-      const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
-      if (active) {
+      setLoadError("");
+      try {
+        const [ev, lk, pr, rq] = await Promise.all([getKvkEvents(), getApprovedLinks(), getPointRules(), getRequirements()]);
+        setEvents(ev);
+        window.__k2194_links = lk;
+        window.__k2194_rules = pr;
+        window.__k2194_req = rq;
+        if (!ev.length) {
+          setLoadError("No KvK events found yet — create one in the admin panel.");
+          return;
+        }
+        const active = ev.find((e) => e.is_active) || ev[ev.length - 1];
         setSelectedEventId(active.id);
         const snaps = await getSnapshots(active.id);
         setSnapshots(snaps);
-        if (snaps.length) {
-          const lastId = snaps[snaps.length - 1].id;
-          setSelectedSnapshotId(lastId);
-          const { baselineRows, latestRows } = await loadSnapshotPair(snaps, lastId);
-          setRows(aggregateGovernors(baselineRows, latestRows, lk, pr, rq).sort((a, b) => b.points - a.points));
+        if (!snaps.length) {
+          setLoadError(`"${active.name}" has no snapshots uploaded yet.`);
+          return;
         }
+        const lastId = snaps[snaps.length - 1].id;
+        setSelectedSnapshotId(lastId);
+        const { baselineRows, latestRows } = await loadSnapshotPair(snaps, lastId);
+        setRows(aggregateGovernors(baselineRows, latestRows, lk, pr, rq).sort((a, b) => b.points - a.points));
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+      } finally {
+        setLoading(false);
       }
-      window.__k2194_links = lk;
-      window.__k2194_rules = pr;
-      window.__k2194_req = rq;
-      setLoading(false);
     })();
   }, []);
 
@@ -62,12 +74,17 @@ export default function RankingsPage() {
   }
 
   async function recompute(snaps, snapshotId) {
-    const { baselineRows, latestRows } = await loadSnapshotPair(snaps, snapshotId);
-    setRows(
-      aggregateGovernors(baselineRows, latestRows, window.__k2194_links, window.__k2194_rules, window.__k2194_req).sort(
-        (a, b) => b.points - a.points
-      )
-    );
+    try {
+      const { baselineRows, latestRows } = await loadSnapshotPair(snaps, snapshotId);
+      setRows(
+        aggregateGovernors(baselineRows, latestRows, window.__k2194_links, window.__k2194_rules, window.__k2194_req).sort(
+          (a, b) => b.points - a.points
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      setLoadError(err?.message || String(err));
+    }
   }
 
   const top300 = useMemo(() => rows.slice(0, 300), [rows]);
@@ -111,6 +128,8 @@ export default function RankingsPage() {
 
         {loading ? (
           <p className="text-center text-steel font-mono">Loading rankings…</p>
+        ) : loadError ? (
+          <p className="text-center text-flareBright font-mono">{loadError}</p>
         ) : (
           <div className="bg-panel border border-hairline rounded-lg overflow-hidden">
             <table className="w-full font-mono text-sm">

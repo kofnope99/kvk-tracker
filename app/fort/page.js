@@ -10,22 +10,35 @@ export default function FortPage() {
   const [statsByWeek, setStatsByWeek] = useState({}); // weekId -> rows
   const [selectedWeekId, setSelectedWeekId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data: wks } = await supabasePublic.from("fort_weeks").select("*").order("created_at", { ascending: true });
-      const list = wks || [];
-      setWeeks(list);
-      const byWeek = {};
-      for (const w of list) {
-        const { data: rows } = await supabasePublic.from("fort_stats").select("*").eq("fort_week_id", w.id);
-        byWeek[w.id] = rows || [];
+      setLoadError("");
+      try {
+        const { data: wks, error: weeksErr } = await supabasePublic
+          .from("fort_weeks")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (weeksErr) throw weeksErr;
+        const list = wks || [];
+        setWeeks(list);
+        const byWeek = {};
+        for (const w of list) {
+          const { data: rows, error: rowsErr } = await supabasePublic.from("fort_stats").select("*").eq("fort_week_id", w.id);
+          if (rowsErr) throw rowsErr;
+          byWeek[w.id] = rows || [];
+        }
+        setStatsByWeek(byWeek);
+        if (list.length) setSelectedWeekId(list[list.length - 1].id);
+      } catch (err) {
+        console.error(err);
+        setLoadError(err?.message || String(err));
+      } finally {
+        setLoading(false);
       }
-      setStatsByWeek(byWeek);
-      if (list.length) setSelectedWeekId(list[list.length - 1].id);
-      setLoading(false);
     })();
   }, []);
 
@@ -78,6 +91,8 @@ export default function FortPage() {
 
         {loading ? (
           <p className="text-center text-steel font-mono">Loading…</p>
+        ) : loadError ? (
+          <p className="text-center text-flareBright font-mono">{loadError}</p>
         ) : (
           <>
             <div className="bg-panel border border-hairline rounded-lg p-6 text-center">
