@@ -328,17 +328,40 @@ export default function HomePage() {
                       )}
                     </div>
                   </div>
-                  {searchResult.linkedFarms?.length > 0 && (
+                  {searchResult.accounts?.length > 1 && (
                     <div>
-                      <p className="text-sm text-steel mb-1">Linked accounts included:</p>
-                      <ul className="text-sm font-mono text-brass space-y-1">
-                        <li>{searchResult.name} ({searchResult.id}) — main</li>
-                        {searchResult.linkedFarms.map((f) => (
-                          <li key={f.id}>
-                            {f.name} ({f.id}) — farm, counted at 20%
-                          </li>
-                        ))}
-                      </ul>
+                      <p className="text-sm text-steel mb-2">Main + farm accounts, all on one screen:</p>
+                      <div className="bg-panel2 border border-hairline rounded-lg overflow-hidden">
+                        <table className="w-full font-mono text-xs">
+                          <thead className="bg-panel3 text-steelDim uppercase">
+                            <tr>
+                              <th className="text-left px-3 py-2">Account</th>
+                              <th className="text-right px-3 py-2">T4 Kills</th>
+                              <th className="text-right px-3 py-2">T5 Kills</th>
+                              <th className="text-right px-3 py-2">Deaths</th>
+                              <th className="text-right px-3 py-2">Counted</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {searchResult.accounts.map((a) => (
+                              <tr key={a.id} className="border-t border-hairline/50">
+                                <td className="px-3 py-2 text-paper">
+                                  {a.name} <span className="text-steelDim">({a.id})</span>{" "}
+                                  <span className={a.role === "main" ? "text-brassBright" : "text-drabBright"}>
+                                    — {a.role}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-right">{Math.round(a.t4_kills).toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right">{Math.round(a.t5_kills).toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right">{Math.round(a.deaths).toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right text-steelDim">
+                                  {a.role === "main" ? "100%" : "20%"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                   {progressData.length > 1 && (

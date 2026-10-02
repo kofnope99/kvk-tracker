@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import NavBar from "../../components/NavBar";
 import SearchBox from "../../components/SearchBox";
 import { formatCompact } from "../../lib/points";
@@ -162,20 +162,37 @@ export default function RankingsPage() {
               </thead>
               <tbody>
                 {top300.map((r, i) => (
-                  <tr
-                    key={r.id}
-                    className={`border-t border-hairline/50 ${r.id === highlightId ? "bg-brass/10" : ""}`}
-                  >
-                    <td className="px-4 py-2 text-steelDim">{i + 1}</td>
-                    <td className="px-4 py-2 text-paper">
-                      {r.name} <span className="text-steelDim">({r.id})</span>
-                    </td>
-                    <td className="px-4 py-2 text-right text-brassBright">{formatCompact(r.points)}</td>
-                    <td className="px-4 py-2 text-right text-steel">{formatCompact(r.required)}</td>
-                    <td className={`px-4 py-2 text-right ${r.pass ? "text-drabBright" : "text-flareBright"}`}>
-                      {r.pass ? "PASS" : "BELOW MIN"}
-                    </td>
-                  </tr>
+                  <React.Fragment key={r.id}>
+                    <tr
+                      className={`border-t border-hairline/50 ${r.id === highlightId ? "bg-brass/10" : ""}`}
+                    >
+                      <td className="px-4 py-2 text-steelDim">{i + 1}</td>
+                      <td className="px-4 py-2 text-paper">
+                        {r.name} <span className="text-steelDim">({r.id})</span>
+                      </td>
+                      <td className="px-4 py-2 text-right text-brassBright">{formatCompact(r.points)}</td>
+                      <td className="px-4 py-2 text-right text-steel">{formatCompact(r.required)}</td>
+                      <td className={`px-4 py-2 text-right ${r.pass ? "text-drabBright" : "text-flareBright"}`}>
+                        {r.pass ? "PASS" : "BELOW MIN"}
+                      </td>
+                    </tr>
+                    {r.linkedFarms?.length > 0 && (
+                      <tr className="bg-panel2/50">
+                        <td></td>
+                        <td colSpan={4} className="px-4 pb-2 pt-0 text-xs text-steelDim">
+                          <span className="text-drabBright">+ farms:</span>{" "}
+                          {r.linkedFarms
+                            .map(
+                              (f) =>
+                                `${f.name} (${f.id}) — T4 ${formatCompact(f.t4_kills)} / T5 ${formatCompact(
+                                  f.t5_kills
+                                )} / Deaths ${formatCompact(f.deaths)}, counted at 20%`
+                            )
+                            .join("  ·  ")}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
