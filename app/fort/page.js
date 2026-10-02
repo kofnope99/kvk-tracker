@@ -21,13 +21,13 @@ export default function FortPage() {
         const { data: wks, error: weeksErr } = await supabasePublic
           .from("fort_weeks")
           .select("*")
-          .order("created_at", { ascending: true });
+          .order("uploaded_at", { ascending: true });
         if (weeksErr) throw weeksErr;
         const list = wks || [];
         setWeeks(list);
         const byWeek = {};
         for (const w of list) {
-          const { data: rows, error: rowsErr } = await supabasePublic.from("fort_stats").select("*").eq("fort_week_id", w.id);
+          const { data: rows, error: rowsErr } = await supabasePublic.from("fort_stats").select("*").eq("week_id", w.id);
           if (rowsErr) throw rowsErr;
           byWeek[w.id] = rows || [];
         }

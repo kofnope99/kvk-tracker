@@ -30,7 +30,7 @@ export async function POST(req) {
 
   const records = rows
     .map((row) => ({
-      fort_week_id: week.id,
+      week_id: week.id,
       governor_id: String(pick(row, ["governor_id", "Governor ID", "ID"]) ?? "").trim(),
       governor_name: String(pick(row, ["name", "Governor Name", "Name"]) ?? "").trim(),
       started: Number(pick(row, ["started", "Started"]) ?? 0),

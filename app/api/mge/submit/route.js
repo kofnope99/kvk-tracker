@@ -18,7 +18,7 @@ export async function POST(req) {
   const { error } = await admin.from("mge_applications").insert({
     governor_id,
     governor_name,
-    vip,
+    vip_level: vip,
     mge_type,
     commander,
     message,

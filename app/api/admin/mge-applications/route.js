@@ -10,12 +10,12 @@ export async function GET() {
 
   // Purge anything older than the retention window before returning results.
   const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  await admin.from("mge_applications").delete().lt("created_at", cutoff);
+  await admin.from("mge_applications").delete().lt("submitted_at", cutoff);
 
   const { data: applications, error } = await admin
     .from("mge_applications")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("submitted_at", { ascending: false });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
   // Last 3 KvK events' T4/T5 kill totals per applicant, for admin context.

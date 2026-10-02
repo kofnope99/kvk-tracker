@@ -4,7 +4,7 @@ import { isAdmin } from "../../../../lib/checkAdmin";
 export async function GET() {
   if (!isAdmin()) return Response.json({ ok: false, error: "Not logged in" }, { status: 401 });
   const admin = supabaseAdmin();
-  const { data, error } = await admin.from("account_links").select("*").order("created_at", { ascending: false });
+  const { data, error } = await admin.from("account_links").select("*").order("requested_at", { ascending: false });
   if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
   return Response.json({ ok: true, links: data });
 }

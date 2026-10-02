@@ -431,9 +431,9 @@ export default function AdminPage() {
               <li key={a.id} className="bg-panel2 rounded px-4 py-3">
                 <div className="flex justify-between">
                   <span>
-                    {a.governor_name} ({a.governor_id}) — VIP {a.vip} — {a.mge_type}
+                    {a.governor_name} ({a.governor_id}) — VIP {a.vip_level} — {a.mge_type}
                   </span>
-                  <span className="text-steelDim text-xs">{new Date(a.created_at).toLocaleDateString()}</span>
+                  <span className="text-steelDim text-xs">{new Date(a.submitted_at).toLocaleDateString()}</span>
                 </div>
                 {a.commander && <div className="text-steel text-xs mt-1">Wants: {a.commander}</div>}
                 {a.message && <div className="text-steel text-xs">Msg: {a.message}</div>}
