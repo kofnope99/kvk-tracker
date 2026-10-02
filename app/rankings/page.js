@@ -155,6 +155,8 @@ export default function RankingsPage() {
                 <tr>
                   <th className="text-left px-4 py-3">#</th>
                   <th className="text-left px-4 py-3">Governor</th>
+                  <th className="text-right px-4 py-3">Total Kills</th>
+                  <th className="text-right px-4 py-3">Deaths</th>
                   <th className="text-right px-4 py-3">Points</th>
                   <th className="text-right px-4 py-3">Required</th>
                   <th className="text-right px-4 py-3">Status</th>
@@ -170,6 +172,10 @@ export default function RankingsPage() {
                       <td className="px-4 py-2 text-paper">
                         {r.name} <span className="text-steelDim">({r.id})</span>
                       </td>
+                      <td className="px-4 py-2 text-right text-paper">
+                        {formatCompact(r.t4_kills + r.t5_kills)}
+                      </td>
+                      <td className="px-4 py-2 text-right text-paper">{formatCompact(r.deaths)}</td>
                       <td className="px-4 py-2 text-right text-brassBright">{formatCompact(r.points)}</td>
                       <td className="px-4 py-2 text-right text-steel">{formatCompact(r.required)}</td>
                       <td className={`px-4 py-2 text-right ${r.pass ? "text-drabBright" : "text-flareBright"}`}>
@@ -179,7 +185,7 @@ export default function RankingsPage() {
                     {r.linkedFarms?.length > 0 && (
                       <tr className="bg-panel2/50">
                         <td></td>
-                        <td colSpan={4} className="px-4 pb-2 pt-0 text-xs text-steelDim">
+                        <td colSpan={6} className="px-4 pb-2 pt-0 text-xs text-steelDim">
                           <span className="text-drabBright">+ farms:</span>{" "}
                           {r.linkedFarms
                             .map(
